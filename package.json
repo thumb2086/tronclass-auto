@@ -1,0 +1,21 @@
+{
+  "name": "tronclass-auto",
+  "version": "1.0.0",
+  "description": "自動觀看 eclass/TronClass 影片、填寫表單的 CLI 工具",
+  "main": "src/index.js",
+  "bin": {
+    "tronclass": "./bin/eclass.js"
+  },
+  "scripts": {
+    "start": "node bin/eclass.js run"
+  },
+  "keywords": ["eclass", "tronclass", "yuntech", "automation", "video"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "commander": "^12.0.0",
+    "chalk": "^4.1.2",
+    "open": "^8.4.2"
+  }
+}
