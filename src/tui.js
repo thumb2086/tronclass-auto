@@ -70,19 +70,13 @@ async function runMenu(config) {
     return;
   }
 
-  const courseChoices = config.courses.map((url, i) => {
-    const match = url.match(/\/course\/(\d+)\//);
-    const id = match ? match[1] : '?';
-    return { name: `[${id}] ${url}`, value: i, checked: true };
-  });
-
-  const { selectedCourses } = await inquirer.prompt([{
-    type: 'checkbox',
-    name: 'selectedCourses',
-    message: '選擇要觀看的課程:',
-    choices: courseChoices,
-    validate: (ans) => ans.length > 0 ? true : '至少選一個課程'
+  const { confirm } = await inquirer.prompt([{
+    type: 'confirm',
+    name: 'confirm',
+    message: `開始觀看全部 ${config.courses.length} 個課程?`,
+    default: true
   }]);
+  if (!confirm) return;
 
   const { headless } = await inquirer.prompt([{
     type: 'confirm',
@@ -94,14 +88,14 @@ async function runMenu(config) {
   console.log('');
   box([
     chalk.green('開始自動觀看'),
-    `課程: ${chalk.cyan(selectedCourses.length)} 個`,
+    `課程: ${chalk.cyan(config.courses.length)} 個`,
     `模式: ${headless ? chalk.gray('無頭') : chalk.white('有頭')}`,
     `倍速: ${chalk.yellow(config.playbackRate || 2)}x`,
   ]);
   console.log('');
 
   const { runWithSelection } = require('./index');
-  await runWithSelection(selectedCourses.map(i => config.courses[i]), headless);
+  await runWithSelection(config.courses, headless);
   await pressAnyKey();
 }
 
