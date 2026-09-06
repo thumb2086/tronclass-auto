@@ -47,6 +47,18 @@ program
   });
 
 program
+  .command('course')
+  .description('管理課程列表')
+  .option('-a, --add <url>', '新增課程 URL')
+  .option('-r, --remove <index>', '移除課程（輸入編號）')
+  .option('-l, --list', '列出所有課程')
+  .option('--clear', '清空所有課程')
+  .action((opts) => {
+    const { manageCourses } = require('../src/config');
+    manageCourses(opts);
+  });
+
+program
   .command('config')
   .description('顯示目前設定')
   .action(() => {

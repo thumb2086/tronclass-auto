@@ -74,9 +74,85 @@ function showConfig() {
   console.log(`  progress: ${PROGRESS_FILE}\n`);
 }
 
+function normalizeUrl(url) {
+  url = url.trim();
+  if (url.match(/^\d+$/)) {
+    return `${BASE_URL}/course/${url}/content#/`;
+  }
+  if (!url.startsWith('http')) {
+    return `${BASE_URL}/course/${url}/content#/`;
+  }
+  if (!url.endsWith('#/') && !url.endsWith('#')) {
+    if (url.includes('content')) {
+      url = url.replace(/\/?$/, '/#/');
+    }
+  }
+  return url;
+}
+
+function manageCourses(opts) {
+  const config = loadConfig();
+
+  if (opts.add) {
+    const url = normalizeUrl(opts.add);
+    config.courses.push(url);
+    saveConfig(config);
+    console.log(chalk.green(`[OK] 已新增課程`));
+    console.log(chalk.white(`  ${url}`));
+    console.log(chalk.gray(`  目前共 ${config.courses.length} 個課程`));
+    return;
+  }
+
+  if (opts.remove) {
+    const idx = parseInt(opts.remove, 10) - 1;
+    if (idx < 0 || idx >= config.courses.length) {
+      console.log(chalk.red(`[ERROR] 編號 ${opts.remove} 不存在`));
+      console.log(chalk.gray(`  目前共 ${config.courses.length} 個課程，請輸入 1~${config.courses.length}`));
+      return;
+    }
+    const removed = config.courses.splice(idx, 1)[0];
+    saveConfig(config);
+    console.log(chalk.green(`[OK] 已移除課程`));
+    console.log(chalk.gray(`  ${removed}`));
+    console.log(chalk.gray(`  目前共 ${config.courses.length} 個課程`));
+    return;
+  }
+
+  if (opts.clear) {
+    config.courses = [];
+    saveConfig(config);
+    console.log(chalk.green('[OK] 已清空所有課程'));
+    return;
+  }
+
+  if (opts.list || (!opts.add && !opts.remove && !opts.clear)) {
+    if (config.courses.length === 0) {
+      console.log(chalk.yellow('\n  目前沒有設定任何課程'));
+      console.log(chalk.gray('  使用方法:'));
+      console.log(chalk.gray('    tronclass course --add <課程ID或URL>'));
+      console.log(chalk.gray('    tronclass course --add 127331'));
+      console.log(chalk.gray('    tronclass course --add https://eclass.yuntech.edu.tw/course/127331/content#/'));
+      console.log('');
+      return;
+    }
+    console.log(chalk.cyan('\n=== 課程列表 ==='));
+    config.courses.forEach((c, i) => {
+      const match = c.match(/\/course\/(\d+)\//);
+      const id = match ? match[1] : '?';
+      console.log(chalk.white(`  ${i + 1}. [${id}] ${c}`));
+    });
+    console.log(chalk.gray(`\n  共 ${config.courses.length} 個課程\n`));
+    console.log(chalk.gray('  操作:'));
+    console.log(chalk.gray('    tronclass course --add <ID或URL>  新增'));
+    console.log(chalk.gray('    tronclass course --remove <編號>   移除'));
+    console.log(chalk.gray('    tronclass course --clear           清空'));
+    console.log('');
+  }
+}
+
 module.exports = {
   CONFIG_DIR, CONFIG_FILE, PROGRESS_FILE, COOKIE_FILE, SALT_FILE,
   BASE_URL, DEFAULT_CONFIG,
   ensureDir, loadConfig, saveConfig,
-  loadProgress, saveProgress, markDone, isDone, showConfig
+  loadProgress, saveProgress, markDone, isDone, showConfig, manageCourses
 };
