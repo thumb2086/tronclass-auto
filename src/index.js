@@ -27,10 +27,28 @@ async function getUncompleted(page, courseId) {
       let completeness = '';
       try { completeness = scope.getActivityCompleteness(a); } catch (e) {}
       if (completeness !== 'full') {
+        let durationSec = 0;
+        try {
+          const durText = actEl.querySelector('.activity-attribute');
+          if (durText) {
+            const m = durText.textContent.match(/(\d{2}):(\d{2}):(\d{2})/);
+            if (m) durationSec = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]);
+          }
+        } catch (e) {}
+        if (durationSec === 0) {
+          try {
+            const durScope = angular.element(actEl).scope();
+            if (durScope && durScope.activity) {
+              const d = durScope.activity.data;
+              if (d && d.duration) durationSec = d.duration;
+            }
+          } catch (e) {}
+        }
         result.push({
           id: a.id,
           title: (a.title || '').substring(0, 60),
-          type: a.type || ''
+          type: a.type || '',
+          durationSec
         });
       }
     });
@@ -49,9 +67,13 @@ async function processCourse(page, courseId, stats) {
 
   console.log(chalk.cyan(`  Uncompleted: ${videos.length} videos, remaining: ${remaining.length}`));
 
+  const totalDuration = remaining.reduce((sum, v) => sum + (v.durationSec || 120), 0);
+  const estWatchTime = Math.ceil(totalDuration / 2) + remaining.length * 15;
+  console.log(chalk.cyan(`  預估時間: ${formatTime(estWatchTime)}`));
+
   if (stats) {
     stats.remainingVideos = remaining.length;
-    stats.estimatedTimeForRemaining = remaining.reduce((sum, v) => sum + 120, 0);
+    stats.estimatedTimeForRemaining = estWatchTime;
   }
 
   for (let i = 0; i < remaining.length; i++) {
@@ -71,8 +93,11 @@ async function processCourse(page, courseId, stats) {
     }
 
     try {
+      const thisDuration = Math.ceil((act.durationSec || 120) / 2) + 15;
       if (stats) {
         stats.remainingVideos = remaining.length - i - 1;
+        stats.estimatedTimeForRemaining -= thisDuration;
+        if (stats.estimatedTimeForRemaining < 0) stats.estimatedTimeForRemaining = 0;
       }
       const success = await watchVideo(page, stats);
       if (success) {
