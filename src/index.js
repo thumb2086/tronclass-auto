@@ -1,7 +1,7 @@
 const re = require;
 const chalk = re('chalk');
-const { loadCookies, autoLogin } = re('./auth');
-const { watchVideo } = re('./video');
+const { loadCookies } = re('./auth');
+const { watchVideo, formatTime, printReport } = re('./video');
 const { loadConfig, saveConfig, markDone, isDone, BASE_URL } = re('./config');
 
 async function getUncompleted(page, courseId) {
@@ -38,57 +38,67 @@ async function getUncompleted(page, courseId) {
   });
 }
 
-async function processCourse(page, courseId) {
+async function processCourse(page, courseId, stats) {
   let done = 0;
   let skip = 0;
+  let fail = 0;
 
   const uncompleted = await getUncompleted(page, courseId);
   const videos = uncompleted.filter(u => u.type === 'online_video');
-
   const remaining = videos.filter(v => !isDone(courseId, v.id));
-  console.log(chalk.cyan(`  Uncompleted videos: ${videos.length}, already done: ${videos.length - remaining.length}, remaining: ${remaining.length}`));
 
-  for (const act of remaining) {
-    console.log(chalk.white(`\n  -> ${act.title}`));
+  console.log(chalk.cyan(`  Uncompleted: ${videos.length} videos, remaining: ${remaining.length}`));
+
+  if (stats) {
+    stats.remainingVideos = remaining.length;
+    stats.estimatedTimeForRemaining = remaining.reduce((sum, v) => sum + 120, 0);
+  }
+
+  for (let i = 0; i < remaining.length; i++) {
+    const act = remaining[i];
+    console.log(chalk.white(`\n  [${i + 1}/${remaining.length}] ${act.title}`));
+
     const url = `${BASE_URL}/course/${courseId}/learning-activity/full-screen#/${act.id}`;
-
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
     } catch (e) {}
     await page.waitForTimeout(5000);
 
     if (!page.url().includes('learning-activity')) {
-      console.log(chalk.yellow('    [WARN] Failed to load activity page, skipping'));
+      console.log(chalk.yellow('    [WARN] Failed to load activity page'));
       skip++;
       continue;
     }
 
     try {
-      const success = await watchVideo(page);
+      if (stats) {
+        stats.remainingVideos = remaining.length - i - 1;
+      }
+      const success = await watchVideo(page, stats);
       if (success) {
         markDone(courseId, act.id);
         done++;
-        console.log(chalk.green('    [OK] Saved to progress'));
+        console.log(chalk.green('    [OK] Saved'));
       } else {
-        skip++;
+        fail++;
       }
     } catch (e) {
       console.log(chalk.red(`    [ERROR] ${e.message}`));
-      skip++;
+      fail++;
     }
 
     await page.waitForTimeout(2000);
   }
 
-  console.log(chalk.cyan(`\n  Result: ${done} watched, ${skip} skipped`));
-  return { done, skip };
+  console.log(chalk.cyan(`  Result: ${done} watched, ${skip} skipped, ${fail} failed`));
+  return { done, skip, fail };
 }
 
 async function showStatus() {
   const config = loadConfig();
   const cookies = loadCookies();
   if (!cookies.length) {
-    console.log(chalk.red('[ERROR] 沒有 Cookie，請先執行 tronclass login 或 tronclass import-cookies'));
+    console.log(chalk.red('[ERROR] 沒有 Cookie，請先執行 tronclass login'));
     return;
   }
 
@@ -112,25 +122,62 @@ async function showStatus() {
   }
 
   const courses = config.courses || [];
-  console.log(chalk.cyan('\n=== 課程進度統計 ==='));
+  console.log(chalk.cyan('\n┌' + '─'.repeat(48) + '┐'));
+  console.log(chalk.cyan('│') + chalk.bold.white('  📋 課程進度統計' + ' '.repeat(30)) + chalk.cyan('│'));
+  console.log(chalk.cyan('├' + '─'.repeat(48) + '┤'));
+
+  let totalVideos = 0;
+  let totalRemaining = 0;
+  let totalExams = 0;
 
   for (const courseUrl of courses) {
     const match = courseUrl.match(/\/course\/(\d+)\//);
     const courseId = match ? match[1] : '?';
     try {
       const uncompleted = await getUncompleted(page, courseId);
-      const total = uncompleted.length;
-      const videos = uncompleted.filter(u => u.type === 'online_video').length;
+      const videos = uncompleted.filter(u => u.type === 'online_video');
       const exams = uncompleted.filter(u => u.type === 'exam').length;
-      const other = total - videos - exams;
-      console.log(chalk.white(`\n  Course ${courseId}: ${total} uncompleted (${videos} videos, ${exams} exams, ${other} other)`));
+      const other = uncompleted.length - videos.length - exams;
+      totalVideos += videos.length;
+      totalRemaining += videos.length;
+      totalExams += exams;
+
+      const bar = generateBar(videos.length, 50);
+      console.log(chalk.cyan('│') + `  [${courseId}] ${videos.length} videos ${exams} exams`.padEnd(50) + chalk.cyan('│'));
+      console.log(chalk.cyan('│') + `    ${bar}`.padEnd(50) + chalk.cyan('│'));
     } catch (e) {
-      console.log(chalk.red(`\n  Course ${courseId}: ERROR - ${e.message}`));
+      console.log(chalk.cyan('│') + `  [${courseId}] ERROR`.padEnd(50) + chalk.cyan('│'));
     }
   }
 
+  console.log(chalk.cyan('├' + '─'.repeat(48) + '┤'));
+  console.log(chalk.cyan('│') + `  總計: ${totalRemaining} videos, ${totalExams} exams`.padEnd(50) + chalk.cyan('│'));
+  console.log(chalk.cyan('│') + `  預估時間: ${formatTime(totalRemaining * 120)}`.padEnd(50) + chalk.cyan('│'));
+  console.log(chalk.cyan('└' + '─'.repeat(48) + '┘'));
   console.log('');
+
   await browser.close();
+}
+
+function generateBar(remaining, width) {
+  if (remaining === 0) return chalk.green('█'.repeat(width) + ' 100%');
+  const filled = Math.max(0, width - Math.min(remaining, width));
+  const empty = width - filled;
+  return chalk.green('█'.repeat(filled)) + chalk.gray('░'.repeat(empty)) + ` ${remaining} remaining`;
+}
+
+async function launchBrowser(headless) {
+  const { chromium } = re('playwright');
+  const { ensureBrowser } = re('./browser');
+  const exePath = await ensureBrowser();
+  const launchOpts = { headless, slowMo: 50 };
+  if (exePath) launchOpts.executablePath = exePath;
+  const browser = await chromium.launch(launchOpts);
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  });
+  return { browser, context };
 }
 
 async function run(opts = {}) {
@@ -146,16 +193,7 @@ async function run(opts = {}) {
 
   if (opts.headless) config.headless = true;
 
-  const { chromium } = re('playwright');
-  const { ensureBrowser } = re('./browser');
-  const exePath = await ensureBrowser();
-  const launchOpts = { headless: config.headless, slowMo: config.slowMo || 50 };
-  if (exePath) launchOpts.executablePath = exePath;
-  const browser = await chromium.launch(launchOpts);
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 900 },
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-  });
+  const { browser, context } = await launchBrowser(config.headless);
   await context.addCookies(cookies);
   const page = await context.newPage();
 
@@ -163,7 +201,7 @@ async function run(opts = {}) {
   await page.waitForTimeout(2000);
 
   if (page.url().includes('login')) {
-    console.log(chalk.red('[ERROR] Cookie 過期，請重新執行 eclass login'));
+    console.log(chalk.red('[ERROR] Cookie 過期，請重新執行 tronclass login'));
     await browser.close();
     return;
   }
@@ -171,7 +209,6 @@ async function run(opts = {}) {
   console.log(chalk.green('[OK] Login verified'));
 
   let courses = config.courses || [];
-
   if (opts.course) {
     const ids = opts.course.split(',').map(s => s.trim());
     courses = courses.filter(url => ids.some(id => url.includes(id)));
@@ -182,33 +219,77 @@ async function run(opts = {}) {
 
   if (!courses.length) {
     console.log(chalk.yellow('[WARN] 沒有設定課程'));
-    console.log(chalk.yellow('  請編輯 ~/.eclass-auto/config.json 加入 courses'));
+    console.log(chalk.yellow('  請執行 tronclass course --add <課程ID>'));
     await browser.close();
     return;
   }
 
-  let totalDone = 0;
-  let totalSkip = 0;
+  await _runCourses(page, courses, browser);
+}
+
+async function runWithSelection(courseUrls, headless) {
+  const config = loadConfig();
+  const cookies = loadCookies();
+
+  if (!cookies.length) {
+    console.log(chalk.red('[ERROR] 沒有 Cookie'));
+    return;
+  }
+
+  const { browser, context } = await launchBrowser(headless);
+  await context.addCookies(cookies);
+  const page = await context.newPage();
+
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.waitForTimeout(2000);
+
+  if (page.url().includes('login')) {
+    console.log(chalk.red('[ERROR] Cookie 過期'));
+    await browser.close();
+    return;
+  }
+
+  console.log(chalk.green('[OK] Login verified\n'));
+
+  await _runCourses(page, courseUrls, browser);
+}
+
+async function _runCourses(page, courses, browser) {
+  const startTime = Date.now();
+  const stats = {
+    videosWatched: 0,
+    videosSkipped: 0,
+    videosFailed: 0,
+    currentVideoDuration: 0,
+    currentVideoElapsed: 0,
+    remainingVideos: 0,
+    estimatedTimeForRemaining: 0,
+    totalElapsed: 0,
+    timeSaved: 0,
+    courseResults: []
+  };
 
   for (let i = 0; i < courses.length; i++) {
     const courseUrl = courses[i];
     const match = courseUrl.match(/\/course\/(\d+)\//);
-    const courseId = match ? match[1] : '127331';
+    const courseId = match ? match[1] : '?';
 
     console.log(chalk.cyan(`\n${'='.repeat(50)}`));
-    console.log(chalk.cyan(`Course ${i + 1}/${courses.length} (ID: ${courseId})`));
+    console.log(chalk.cyan(`  Course ${i + 1}/${courses.length} (ID: ${courseId})`));
     console.log(chalk.cyan(`${'='.repeat(50)}`));
 
-    const result = await processCourse(page, courseId);
-    totalDone += result.done;
-    totalSkip += result.skip;
+    const result = await processCourse(page, courseId, stats);
+    stats.courseResults.push({ id: courseId, ...result });
+    stats.videosWatched += result.done;
+    stats.videosSkipped += result.skip;
+    stats.videosFailed += result.fail;
   }
 
-  console.log(chalk.cyan(`\n${'='.repeat(50)}`));
-  console.log(chalk.green(`ALL DONE: ${totalDone} watched, ${totalSkip} skipped`));
-  console.log(chalk.cyan(`${'='.repeat(50)}`));
+  stats.totalElapsed = Math.floor((Date.now() - startTime) / 1000);
+  stats.timeSaved = Math.floor(stats.videosWatched * 60);
 
+  printReport(stats);
   await browser.close();
 }
 
-module.exports = { run, showStatus };
+module.exports = { run, runWithSelection, showStatus };

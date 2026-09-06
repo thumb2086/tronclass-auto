@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
 const { program } = require('commander');
-const path = require('path');
-
 const pkg = require('../package.json');
 
 program
@@ -39,8 +37,16 @@ program
   });
 
 program
+  .command('menu')
+  .description('互動式選單')
+  .action(async () => {
+    const { mainMenu } = require('../src/tui');
+    await mainMenu();
+  });
+
+program
   .command('status')
-  .description('查看各課程進度統計')
+  .description('查看各課程進度統計（含報表）')
   .action(async () => {
     const { showStatus } = require('../src/index');
     await showStatus();
@@ -49,7 +55,7 @@ program
 program
   .command('course')
   .description('管理課程列表')
-  .option('-a, --add <url>', '新增課程 URL')
+  .option('-a, --add <url>', '新增課程 ID 或 URL')
   .option('-r, --remove <index>', '移除課程（輸入編號）')
   .option('-l, --list', '列出所有課程')
   .option('--clear', '清空所有課程')
@@ -66,4 +72,10 @@ program
     showConfig();
   });
 
-program.parse();
+const args = process.argv.slice(2);
+if (args.length === 0) {
+  const { mainMenu } = require('../src/tui');
+  mainMenu().catch(() => process.exit(0));
+} else {
+  program.parse();
+}

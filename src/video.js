@@ -1,10 +1,15 @@
 const chalk = require('chalk');
 
-function log(msg) {
-  console.log(msg);
+function formatTime(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
-async function watchVideo(page) {
+async function watchVideo(page, stats) {
   const hasVideo = await page.evaluate(() => document.querySelector('video') !== null);
   if (!hasVideo) {
     log(chalk.yellow('    [VIDEO] No video element'));
@@ -50,11 +55,17 @@ async function watchVideo(page) {
   if (!duration || duration <= 0) {
     log(chalk.yellow('    [VIDEO] Cannot get duration, waiting 30s...'));
     await page.waitForTimeout(30000);
+    if (stats) stats.videosWatched++;
     return true;
   }
 
   const waitTime = (duration / 2) + 15;
-  log(chalk.blue(`    [VIDEO] ${Math.floor(duration)}s video, waiting ~${Math.floor(waitTime)}s (2x)`));
+  log(chalk.blue(`    [VIDEO] ${formatTime(duration)} video, waiting ~${formatTime(waitTime)} (2x)`));
+
+  if (stats) {
+    stats.currentVideoDuration = duration / 2;
+    stats.currentVideoElapsed = 0;
+  }
 
   let elapsed = 0;
   let lastPct = -1;
@@ -63,6 +74,8 @@ async function watchVideo(page) {
   while (elapsed < waitTime) {
     await page.waitForTimeout(5000);
     elapsed += 5;
+
+    if (stats) stats.currentVideoElapsed = elapsed;
 
     const state = await page.evaluate(() => {
       const v = document.querySelector('video');
@@ -76,8 +89,17 @@ async function watchVideo(page) {
     });
 
     if (state.p > lastPct) {
-      log(chalk.blue(`    [VIDEO] ${state.p}% (${Math.floor(elapsed)}s)`));
-      lastPct = state.p;
+      const pct = state.p;
+      const remaining = Math.max(0, waitTime - elapsed);
+      let etaStr = '';
+      if (stats && stats.remainingVideos > 0) {
+        const totalRemaining = remaining + stats.estimatedTimeForRemaining;
+        etaStr = chalk.gray(` | ETA: ${formatTime(totalRemaining)}`);
+      } else {
+        etaStr = chalk.gray(` | ~${formatTime(remaining)} left`);
+      }
+      log(chalk.blue(`    [VIDEO] ${pct}% (${formatTime(elapsed)})${etaStr}`));
+      lastPct = pct;
     }
 
     if (state.e) {
@@ -87,7 +109,7 @@ async function watchVideo(page) {
 
     if (state.stalled) {
       if (elapsed % 15 === 0) {
-        log(chalk.gray(`    [VIDEO] Buffering... (${Math.floor(elapsed)}s)`));
+        log(chalk.gray(`    [VIDEO] Buffering... (${formatTime(elapsed)})`));
       }
       continue;
     }
@@ -105,7 +127,35 @@ async function watchVideo(page) {
   }
 
   await page.waitForTimeout(3000);
+  if (stats) stats.videosWatched++;
   return true;
 }
 
-module.exports = { watchVideo };
+function log(msg) {
+  console.log(msg);
+}
+
+function printReport(stats) {
+  console.log('');
+  console.log(chalk.cyan('┌' + '─'.repeat(48) + '┐'));
+  console.log(chalk.cyan('│') + chalk.bold.white('  📊 報表' + ' '.repeat(39)) + chalk.cyan('│'));
+  console.log(chalk.cyan('├' + '─'.repeat(48) + '┤'));
+  console.log(chalk.cyan('│') + `  已觀看: ${chalk.green(stats.videosWatched + ' 部')}`.padEnd(50) + chalk.cyan('│'));
+  console.log(chalk.cyan('│') + `  已跳過: ${chalk.yellow(stats.videosSkipped + ' 部')}`.padEnd(50) + chalk.cyan('│'));
+  console.log(chalk.cyan('│') + `  失敗:   ${chalk.red(stats.videosFailed + ' 部')}`.padEnd(50) + chalk.cyan('│'));
+  console.log(chalk.cyan('├' + '─'.repeat(48) + '┤'));
+  console.log(chalk.cyan('│') + `  總花費: ${chalk.white(formatTime(stats.totalElapsed))}`.padEnd(50) + chalk.cyan('│'));
+  console.log(chalk.cyan('│') + `  預估節省: ${chalk.green(formatTime(stats.timeSaved))}`.padEnd(50) + chalk.cyan('│'));
+  console.log(chalk.cyan('├' + '─'.repeat(48) + '┤'));
+  if (stats.courseResults.length > 0) {
+    stats.courseResults.forEach(cr => {
+      console.log(chalk.cyan('│') + `  課程 ${cr.id}: ${chalk.green(cr.done + '✓')} ${chalk.yellow(cr.skip + '⊘')} ${chalk.red(cr.fail + '✗')}`.padEnd(50) + chalk.cyan('│'));
+    });
+    console.log(chalk.cyan('├' + '─'.repeat(48) + '┤'));
+  }
+  console.log(chalk.cyan('│') + `  完成時間: ${chalk.white(new Date().toLocaleString())}`.padEnd(52) + chalk.cyan('│'));
+  console.log(chalk.cyan('└' + '─'.repeat(48) + '┘'));
+  console.log('');
+}
+
+module.exports = { watchVideo, formatTime, printReport };
