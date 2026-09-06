@@ -97,32 +97,54 @@ async function autoLogin(baseUrl) {
   console.log(chalk.cyan('等待您完成登入...'));
   console.log(chalk.cyan('（登入後頁面會自動跳轉，Cookie 會自動儲存）'));
 
+  let sawLogin = false;
   let saved = false;
   let checkCount = 0;
 
   const checkInterval = setInterval(async () => {
     checkCount++;
     const url = page.url();
+    const isLoginPage = url.includes('login') || url.includes('auth') || url.includes('cas') || url.includes('signin');
 
-    if (!url.includes('login') && !url.includes('auth') && !url.includes('cas')) {
-      if (!saved) {
-        saved = true;
-        const cookies = await context.cookies();
-        const eclassCookies = cookies.filter(c =>
-          c.domain.includes('yuntech.edu.tw') || c.domain.includes('eclass')
-        );
+    if (isLoginPage) {
+      sawLogin = true;
+    }
 
-        if (eclassCookies.length > 0) {
-          saveCookies(eclassCookies);
-          console.log(chalk.green(`\n[AUTH] 登入成功！自動取得 ${eclassCookies.length} 個 Cookie`));
-          console.log(chalk.green('[AUTH] 現在可以執行 tronclass run 開始自動化\n'));
-        } else {
-          console.log(chalk.yellow('\n[AUTH] 找不到 eclass Cookie，請確認已成功登入'));
-        }
+    if (sawLogin && !isLoginPage && !saved) {
+      saved = true;
+      console.log(chalk.cyan('偵測到頁面跳轉，驗證登入狀態...'));
+      await page.waitForTimeout(3000);
 
-        clearInterval(checkInterval);
-        await browser.close();
+      const isLoggedIn = await page.evaluate(() => {
+        return document.querySelector('[class*="profile"]') !== null ||
+               document.querySelector('[class*="avatar"]') !== null ||
+               document.querySelector('[class*="user-name"]') !== null ||
+               document.querySelector('[ng-click*="showUserOperationList"]') !== null ||
+               document.querySelector('a[href*="logout"]') !== null ||
+               document.querySelector('a[href*="settings"]') !== null;
+      });
+
+      if (!isLoggedIn) {
+        console.log(chalk.yellow('  頁面已跳轉但未偵測到登入狀態，可能未完成登入'));
+        saved = false;
+        return;
       }
+
+      const cookies = await context.cookies();
+      const eclassCookies = cookies.filter(c =>
+        c.domain.includes('yuntech.edu.tw') || c.domain.includes('eclass')
+      );
+
+      if (eclassCookies.length > 0) {
+        saveCookies(eclassCookies);
+        console.log(chalk.green(`\n[AUTH] 登入成功！自動取得 ${eclassCookies.length} 個 Cookie`));
+        console.log(chalk.green('[AUTH] 現在可以執行 tronclass run 開始自動化\n'));
+      } else {
+        console.log(chalk.yellow('\n[AUTH] 找不到 eclass Cookie，請確認已成功登入'));
+      }
+
+      clearInterval(checkInterval);
+      await browser.close();
     }
 
     if (checkCount > 300) {
