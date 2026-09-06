@@ -81,9 +81,14 @@ async function autoLogin(baseUrl) {
   console.log(chalk.yellow('將開啟瀏覽器，請手動登入'));
   console.log(chalk.yellow('登入成功後，Cookie 會自動儲存\n'));
 
-  const { chromium } = require('playwright');
+  const { ensureBrowser } = require('./browser');
+  const exePath = await ensureBrowser();
 
-  const browser = await chromium.launch({ headless: false, slowMo: 50 });
+  const { chromium } = require('playwright');
+  const launchOpts = { headless: false, slowMo: 50 };
+  if (exePath) launchOpts.executablePath = exePath;
+
+  const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext();
   const page = await context.newPage();
 
@@ -110,7 +115,7 @@ async function autoLogin(baseUrl) {
         if (eclassCookies.length > 0) {
           saveCookies(eclassCookies);
           console.log(chalk.green(`\n[AUTH] 登入成功！自動取得 ${eclassCookies.length} 個 Cookie`));
-          console.log(chalk.green('[AUTH] 現在可以執行 eclass run 開始自動化\n'));
+          console.log(chalk.green('[AUTH] 現在可以執行 tronclass run 開始自動化\n'));
         } else {
           console.log(chalk.yellow('\n[AUTH] 找不到 eclass Cookie，請確認已成功登入'));
         }

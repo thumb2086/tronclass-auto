@@ -88,12 +88,16 @@ async function showStatus() {
   const config = loadConfig();
   const cookies = loadCookies();
   if (!cookies.length) {
-    console.log(chalk.red('[ERROR] 沒有 Cookie，請先執行 eclass login 或 eclass import-cookies'));
+    console.log(chalk.red('[ERROR] 沒有 Cookie，請先執行 tronclass login 或 tronclass import-cookies'));
     return;
   }
 
   const { chromium } = re('playwright');
-  const browser = await chromium.launch({ headless: true, slowMo: 50 });
+  const { ensureBrowser } = re('./browser');
+  const exePath = await ensureBrowser();
+  const launchOpts = { headless: true, slowMo: 50 };
+  if (exePath) launchOpts.executablePath = exePath;
+  const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext();
   await context.addCookies(cookies);
   const page = await context.newPage();
@@ -135,19 +139,19 @@ async function run(opts = {}) {
 
   if (!cookies.length) {
     console.log(chalk.red('[ERROR] 沒有 Cookie'));
-    console.log(chalk.yellow('  請執行: eclass login        （自動取得 Cookie）'));
-    console.log(chalk.yellow('  或:     eclass import-cookies "session=xxx"'));
+    console.log(chalk.yellow('  請執行: tronclass login        （自動取得 Cookie）'));
+    console.log(chalk.yellow('  或:     tronclass import-cookies "session=xxx"'));
     return;
   }
 
   if (opts.headless) config.headless = true;
 
   const { chromium } = re('playwright');
-
-  const browser = await chromium.launch({
-    headless: config.headless,
-    slowMo: config.slowMo || 50
-  });
+  const { ensureBrowser } = re('./browser');
+  const exePath = await ensureBrowser();
+  const launchOpts = { headless: config.headless, slowMo: config.slowMo || 50 };
+  if (exePath) launchOpts.executablePath = exePath;
+  const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext({
     viewport: { width: 1280, height: 900 },
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
