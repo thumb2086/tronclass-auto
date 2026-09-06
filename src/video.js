@@ -114,7 +114,14 @@ async function watchVideo(page, stats) {
       continue;
     }
 
-    if (state.paused && elapsed > 5) {
+    if (state.paused && !state.stalled && elapsed > 10) {
+      await page.waitForTimeout(3000);
+      const stillPaused = await page.evaluate(() => {
+        const v = document.querySelector('video');
+        return v ? v.paused : false;
+      });
+      if (!stillPaused) continue;
+
       restartCount++;
       if (restartCount > 10) {
         log(chalk.red('    [VIDEO] Too many restarts, giving up'));
