@@ -199,10 +199,10 @@ async function launchBrowser(headless) {
     headless,
     slowMo: 50,
     args: [
+      '--disable-accelerated-video-decode',
       '--disable-background-timer-throttling',
       '--disable-backgrounding-occluded-windows',
       '--disable-renderer-backgrounding',
-      '--disable-features=MediaFoundationVideoCapture,HardwareMediaKeyHandling',
     ]
   };
   if (exePath) launchOpts.executablePath = exePath;
