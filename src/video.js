@@ -20,13 +20,98 @@ function log(msg) {
   console.log(msg);
 }
 
+async function detectPlayerType(page) {
+  return page.evaluate(() => {
+    const v = document.querySelector('video');
+    if (v) return 'html5';
+
+    for (const f of document.querySelectorAll('iframe')) {
+      const src = (f.src || f.getAttribute('data-src') || '').toLowerCase();
+      if (src.includes('youtube') || src.includes('youtu.be')) return 'youtube';
+      if (src.includes('vimeo')) return 'vimeo';
+      try {
+        if (f.contentDocument) {
+          const fv = f.contentDocument.querySelector('video');
+          if (fv) return 'html5';
+        }
+      } catch (e) {}
+    }
+    return 'none';
+  });
+}
+
 async function watchVideo(page, stats) {
-  const hasVideo = await page.evaluate(() => document.querySelector('video') !== null);
-  if (!hasVideo) {
-    log(chalk.yellow('  No video element'));
+  const playerType = await detectPlayerType(page);
+
+  if (playerType === 'none') {
+    log(chalk.yellow('  No player found'));
     return false;
   }
 
+  if (playerType === 'youtube') {
+    return await watchYouTube(page, stats);
+  }
+
+  return await watchHTML5(page, stats);
+}
+
+async function watchYouTube(page, stats) {
+  log(chalk.blue('  YouTube embed (platform tracks progress)'));
+
+  await page.evaluate(() => {
+    const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+    if (!f) return;
+    try {
+      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setPlaybackRate', args: [2] }), '*');
+      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
+      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
+    } catch (e) {}
+  });
+
+  const ytDuration = await page.evaluate(() => {
+    const actText = document.querySelector('.activity-attribute, [class*="attribute"]');
+    if (actText) {
+      const m = actText.textContent.match(/(\d{2}):(\d{2}):(\d{2})/);
+      if (m) return parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]);
+    }
+    return 180;
+  });
+
+  const waitTime = Math.ceil(ytDuration / 2) + 30;
+  log(chalk.blue(`  ~${formatTime(ytDuration)} video → waiting ~${formatTime(waitTime)} (2x)`));
+
+  let elapsed = 0;
+  let lastPct = -1;
+
+  while (elapsed < waitTime) {
+    await page.waitForTimeout(5000);
+    elapsed += 5;
+
+    const pct = Math.min(100, Math.floor((elapsed / waitTime) * 100));
+    if (pct > lastPct) {
+      const barWidth = 20;
+      const filled = Math.floor(barWidth * pct / 100);
+      const empty = barWidth - filled;
+      const bar = chalk.green('█'.repeat(filled)) + chalk.gray('░'.repeat(empty));
+      let etaStr = '';
+      const remaining = Math.max(0, waitTime - elapsed);
+      if (stats && stats.remainingVideos > 0) {
+        etaStr = chalk.gray(` | ETA ${formatTime(remaining + stats.estimatedTimeForRemaining)}`);
+      } else {
+        etaStr = chalk.gray(` | ${formatTime(remaining)} left`);
+      }
+      progress(`${bar} ${String(pct).padStart(3)}%  (${formatTime(elapsed)})${etaStr}`);
+      lastPct = pct;
+    }
+  }
+
+  log(chalk.green('  Done ✓'));
+  await page.waitForTimeout(2000);
+  if (stats) stats.videosWatched++;
+  return true;
+}
+
+async function watchHTML5(page, stats) {
   log(chalk.blue('  Muted + 2x'));
 
   await page.evaluate(() => {

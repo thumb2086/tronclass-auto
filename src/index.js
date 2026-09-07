@@ -118,18 +118,22 @@ async function processCourse(page, courseId, stats) {
       break;
     }
 
-    const hasVideo = await page.evaluate(() => {
-      if (document.querySelector('video')) return true;
+    const playerType = await page.evaluate(() => {
+      if (document.querySelector('video')) return 'html5';
+      const yt = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"], iframe[src*="vimeo"]');
+      if (yt) return 'iframe';
       for (const f of document.querySelectorAll('iframe')) {
-        try { if (f.contentDocument && f.contentDocument.querySelector('video')) return true; } catch (e) {}
+        try { if (f.contentDocument && f.contentDocument.querySelector('video')) return 'html5'; } catch (e) {}
       }
-      return false;
+      return 'none';
     });
-    if (!hasVideo) {
+    if (playerType === 'none') {
       console.log(chalk.yellow('  No video, waiting more...'));
       await page.waitForTimeout(10000);
       const hasVideoNow = await page.evaluate(() => {
         if (document.querySelector('video')) return true;
+        const yt = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"], iframe[src*="vimeo"]');
+        if (yt) return true;
         for (const f of document.querySelectorAll('iframe')) {
           try { if (f.contentDocument && f.contentDocument.querySelector('video')) return true; } catch (e) {}
         }
