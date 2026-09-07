@@ -54,7 +54,13 @@ function saveProgress(data) {
 
 function markDone(courseId, activityId) {
   const p = loadProgress();
-  p[`${courseId}_${activityId}`] = true;
+  p[`${courseId}_${activityId}`] = 'done';
+  saveProgress(p);
+}
+
+function markLocked(courseId, activityId) {
+  const p = loadProgress();
+  p[`${courseId}_${activityId}`] = 'locked';
   saveProgress(p);
 }
 
@@ -154,5 +160,5 @@ module.exports = {
   CONFIG_DIR, CONFIG_FILE, PROGRESS_FILE, COOKIE_FILE, SALT_FILE,
   BASE_URL, DEFAULT_CONFIG,
   ensureDir, loadConfig, saveConfig,
-  loadProgress, saveProgress, markDone, isDone, showConfig, manageCourses
+  loadProgress, saveProgress, markDone, markLocked, isDone, showConfig, manageCourses
 };

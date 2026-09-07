@@ -81,6 +81,7 @@ async function processCourse(page, courseId, stats) {
   let skip = 0;
   let fail = 0;
   let totalProcessed = 0;
+  let consecutiveLocked = 0;
 
   console.log(chalk.cyan(`  [fetching course activities...]`));
 
@@ -112,11 +113,29 @@ async function processCourse(page, courseId, stats) {
     await page.waitForTimeout(5000);
 
     if (!page.url().includes('learning-activity')) {
-      console.log(chalk.yellow('  [WARN] Failed to load, locked or skipped'));
-      skip++;
-      markDone(courseId, act.id);
-      totalProcessed++;
-      continue;
+      console.log(chalk.yellow('  Locked (page redirect), skipping rest'));
+      markLocked(courseId, act.id);
+      break;
+    }
+
+    const hasVideo = await page.evaluate(() => document.querySelector('video') !== null);
+    if (!hasVideo) {
+      consecutiveLocked++;
+      if (consecutiveLocked >= 2) {
+        console.log(chalk.yellow('  Locked (no video), stopping this course'));
+        markLocked(courseId, act.id);
+        break;
+      }
+      console.log(chalk.yellow('  No video, might be loading... waiting'));
+      await page.waitForTimeout(5000);
+      const hasVideoNow = await page.evaluate(() => document.querySelector('video') !== null);
+      if (!hasVideoNow) {
+        console.log(chalk.yellow('  Still no video, locked'));
+        markLocked(courseId, act.id);
+        break;
+      }
+    } else {
+      consecutiveLocked = 0;
     }
 
     try {
