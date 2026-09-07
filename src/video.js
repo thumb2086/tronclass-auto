@@ -17,8 +17,7 @@ function progress(msg) {
 }
 
 function log(msg) {
-  process.stdout.write('\n');
-  progress(msg);
+  console.log(msg);
 }
 
 async function watchVideo(page, stats) {
