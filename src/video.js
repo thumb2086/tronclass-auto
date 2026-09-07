@@ -66,18 +66,19 @@ async function watchYouTube(page, stats) {
       return false;
     }
 
-    const evalYT = async (code) => {
-      return await ytFrame.evaluate(code).catch(() => null);
-    };
-
-    log(chalk.blue('  Starting video...'));
+    log(chalk.gray(`  Frame found: ${ytFrame.url().substring(0, 60)}`));
 
     let playerReady = false;
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const ready = await evalYT("() => { const p = document.querySelector('#movie_player'); return p && typeof p.playVideo === 'function'; }");
-      if (ready) { playerReady = true; break; }
-      log(chalk.gray(`  Waiting for player... (${attempt + 1}/10)`));
-      await page.waitForTimeout(3000);
+    for (let attempt = 0; attempt < 15; attempt++) {
+      try {
+        const ready = await ytFrame.evaluate(() => {
+          const p = document.querySelector('#movie_player');
+          return !!(p && typeof p.playVideo === 'function');
+        });
+        if (ready) { playerReady = true; break; }
+      } catch (e) {}
+      if (attempt % 3 === 0) log(chalk.gray(`  Waiting for player... (${attempt + 1}/15)`));
+      await page.waitForTimeout(2000);
     }
 
     if (!playerReady) {
@@ -85,26 +86,36 @@ async function watchYouTube(page, stats) {
       return false;
     }
 
-    await evalYT("() => { const p = document.querySelector('#movie_player'); p.playVideo(); }");
-    await page.waitForTimeout(3000);
+    log(chalk.blue('  Starting video...'));
+    await ytFrame.evaluate(() => document.querySelector('#movie_player').playVideo());
+    await page.waitForTimeout(5000);
 
-    const state1 = await evalYT("() => document.querySelector('#movie_player').getPlayerState()");
+    const state1 = await ytFrame.evaluate(() => document.querySelector('#movie_player').getPlayerState());
     if (state1 !== 1) {
-      log(chalk.yellow('  Retrying play...'));
-      await evalYT("() => { const p = document.querySelector('#movie_player'); p.playVideo(); }");
+      log(chalk.yellow(`  State: ${state1}, retrying...`));
+      await ytFrame.evaluate(() => document.querySelector('#movie_player').playVideo());
       await page.waitForTimeout(5000);
     }
 
-    await evalYT("() => { const p = document.querySelector('#movie_player'); p.mute(); p.setPlaybackRate(2); }");
-    await page.waitForTimeout(2000);
+    await ytFrame.evaluate(() => {
+      const p = document.querySelector('#movie_player');
+      p.mute();
+      p.setPlaybackRate(2);
+    });
+    await page.waitForTimeout(3000);
 
-    rate = await evalYT("() => document.querySelector('#movie_player').getPlaybackRate()") || 1;
+    rate = await ytFrame.evaluate(() => document.querySelector('#movie_player').getPlaybackRate());
     log(chalk.blue(`  Speed: ${rate}x`));
 
-    const state2 = await evalYT("() => document.querySelector('#movie_player').getPlayerState()");
+    const state2 = await ytFrame.evaluate(() => document.querySelector('#movie_player').getPlayerState());
     if (state2 === 1) {
       log(chalk.green('  Playing ✓'));
     } else {
+      log(chalk.yellow(`  Final state: ${state2}`));
+    }
+  } catch (e) {
+    log(chalk.yellow(`  YouTube error: ${e.message}`));
+  }
       log(chalk.yellow(`  State: ${state2}`));
     }
   } catch (e) {
