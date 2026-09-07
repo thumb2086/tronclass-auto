@@ -126,8 +126,8 @@ async function watchYouTube(page, stats) {
     return 180;
   });
 
-  const waitTime = (rate >= 2 ? Math.ceil(ytDuration / 2) : ytDuration) + 30;
-  log(chalk.blue(`  ~${formatTime(ytDuration)} video → ~${formatTime(waitTime)} (${rate}x)`));
+  const waitTime = ytDuration + 30;
+  log(chalk.blue(`  ~${formatTime(ytDuration)} video → ~${formatTime(waitTime)} (2x playback, full wait)`));
 
   if (stats) {
     stats.currentVideoDuration = ytDuration;
