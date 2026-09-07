@@ -56,17 +56,29 @@ async function watchVideo(page, stats) {
 }
 
 async function watchYouTube(page, stats) {
-  log(chalk.blue('  YouTube embed (platform tracks progress)'));
+  log(chalk.blue('  YouTube embed (1x, platform tracks progress)'));
 
   await page.evaluate(() => {
     const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
     if (!f) return;
     try {
-      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setPlaybackRate', args: [2] }), '*');
       f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
       f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
     } catch (e) {}
   });
+
+  try {
+    const frame = page.frameLocator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+    const playBtn = frame.locator('.ytp-large-play-button, .ytp-play-button, button[aria-label*="Play"], button[aria-label*="play"]');
+    await playBtn.first().click({ timeout: 5000 }).catch(() => {});
+  } catch (e) {}
+
+  try {
+    const ytFrame = page.locator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+    await ytFrame.click({ timeout: 3000 }).catch(() => {});
+  } catch (e) {}
+
+  await page.waitForTimeout(3000);
 
   const ytDuration = await page.evaluate(() => {
     const actText = document.querySelector('.activity-attribute, [class*="attribute"]');
@@ -77,8 +89,8 @@ async function watchYouTube(page, stats) {
     return 180;
   });
 
-  const waitTime = Math.ceil(ytDuration / 2) + 30;
-  log(chalk.blue(`  ~${formatTime(ytDuration)} video → waiting ~${formatTime(waitTime)} (2x)`));
+  const waitTime = ytDuration + 30;
+  log(chalk.blue(`  ~${formatTime(ytDuration)} video → waiting ~${formatTime(waitTime)} (1x, YouTube)`));
 
   let elapsed = 0;
   let lastPct = -1;
