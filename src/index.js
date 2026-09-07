@@ -174,23 +174,30 @@ async function showStatus() {
     try {
       const uncompleted = await getUncompleted(page, courseId);
       const videos = uncompleted.filter(u => u.type === 'online_video');
+      const remaining = videos.filter(v => !isDone(courseId, v.id));
       const exams = uncompleted.filter(u => u.type === 'exam').length;
-      const other = uncompleted.length - videos.length - exams;
       totalVideos += videos.length;
-      totalRemaining += videos.length;
+      totalRemaining += remaining.length;
       totalExams += exams;
 
-      const bar = generateBar(videos.length, 50);
-      console.log(chalk.cyan('│') + `  [${courseId}] ${videos.length} videos ${exams} exams`.padEnd(50) + chalk.cyan('│'));
-      console.log(chalk.cyan('│') + `    ${bar}`.padEnd(50) + chalk.cyan('│'));
+      const pct = videos.length > 0 ? Math.floor(((videos.length - remaining.length) / videos.length) * 100) : 100;
+      const filled = Math.floor(50 * pct / 100);
+      const empty = 50 - filled;
+      const bar = pct === 100
+        ? chalk.green('█'.repeat(50))
+        : chalk.green('█'.repeat(filled)) + chalk.gray('░'.repeat(empty));
+
+      const doneCount = videos.length - remaining.length;
+      console.log(chalk.cyan('│') + `  [${courseId}] ${doneCount}/${videos.length} videos  ${exams} exams`.padEnd(50) + chalk.cyan('│'));
+      console.log(chalk.cyan('│') + `    ${bar} ${pct}%`.padEnd(52) + chalk.cyan('│'));
     } catch (e) {
       console.log(chalk.cyan('│') + `  [${courseId}] ERROR`.padEnd(50) + chalk.cyan('│'));
     }
   }
 
   console.log(chalk.cyan('├' + '─'.repeat(48) + '┤'));
-  console.log(chalk.cyan('│') + `  總計: ${totalRemaining} videos, ${totalExams} exams`.padEnd(50) + chalk.cyan('│'));
-  console.log(chalk.cyan('│') + `  預估時間: ${formatTime(totalRemaining * 120)}`.padEnd(50) + chalk.cyan('│'));
+  console.log(chalk.cyan('│') + `  剩餘: ${totalRemaining} videos  |  考試: ${totalExams}`.padEnd(50) + chalk.cyan('│'));
+  console.log(chalk.cyan('│') + `  預估: ${formatTime(totalRemaining * 120)}`.padEnd(50) + chalk.cyan('│'));
   console.log(chalk.cyan('└' + '─'.repeat(48) + '┘'));
   console.log('');
 
