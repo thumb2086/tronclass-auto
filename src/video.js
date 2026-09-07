@@ -61,33 +61,57 @@ async function watchYouTube(page, stats) {
   try {
     const ytFrame = page.locator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
     await ytFrame.click({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(3000);
+
+    await page.evaluate(() => {
+      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+      if (!f) return;
+      f.contentWindow.postMessage('{"event":"listening"}', '*');
+    });
     await page.waitForTimeout(2000);
 
-    const frame = page.frameLocator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-    const playBtn = frame.locator('.ytp-large-play-button');
-    await playBtn.click({ timeout: 5000 }).catch(() => {});
+    await page.evaluate(() => {
+      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+      if (!f) return;
+      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
+    });
+    await page.waitForTimeout(1000);
+
+    await page.evaluate(() => {
+      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+      if (!f) return;
+      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
+    });
+    await page.waitForTimeout(1000);
+
+    await page.evaluate(() => {
+      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+      if (!f) return;
+      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setPlaybackRate', args: [2] }), '*');
+    });
     await page.waitForTimeout(2000);
 
-    try {
-      await frame.locator('.ytp-settings-button').click({ timeout: 3000 });
-      await page.waitForTimeout(500);
-      await frame.locator('.ytp-menuitem:has-text("播放速度"), .ytp-menuitem:has-text("Playback speed")').click({ timeout: 3000 });
-      await page.waitForTimeout(500);
-      await frame.locator('.ytp-menuitem:has-text("2"), .ytp-menuitem:has-text("2x")').click({ timeout: 3000 });
-      log(chalk.blue('  Speed: 2x ✓'));
-    } catch (e) {
-      log(chalk.yellow('  Speed: 1x (settings menu unavailable)'));
-    }
-
-    try {
-      await frame.locator('.ytp-settings-button').click({ timeout: 2000 });
-      await page.waitForTimeout(500);
-      await frame.locator('.ytp-menuitem:has-text("字幕"), .ytp-menuitem:has-text("Subtitles"), .ytp-menuitem:has-text("CC")').click({ timeout: 2000 }).catch(() => {});
-      await frame.locator('.ytp-menuitem:has-text("關閉"), .ytp-menuitem:has-text("Off"), .ytp-menuitem:has-text("None")').click({ timeout: 2000 }).catch(() => {});
-      await page.keyboard.press('Escape');
-    } catch (e) {}
+    const rate = await page.evaluate(() => {
+      return new Promise((resolve) => {
+        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+        if (!f) { resolve(1); return; }
+        const handler = (e) => {
+  let rate = 1;
+  try {
+            const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+            if (d.event === 'infoDelivery' && d.info && d.info.playbackRate) {
+              resolve(d.info.playbackRate);
+            }
+          } catch(e) {}
+        };
+        window.addEventListener('message', handler);
+        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getPlaybackRate', args: [] }), '*');
+        setTimeout(() => { window.removeEventListener('message', handler); resolve(1); }, 3000);
+      });
+    });
+    log(chalk.blue(`  Speed: ${rate}x ✓`));
   } catch (e) {
-    log(chalk.yellow('  YouTube setup failed, falling back'));
+    log(chalk.yellow(`  YouTube setup error: ${e.message}`));
   }
 
   await page.waitForTimeout(2000);
@@ -101,8 +125,8 @@ async function watchYouTube(page, stats) {
     return 180;
   });
 
-  const waitTime = ytDuration + 30;
-  log(chalk.blue(`  ~${formatTime(ytDuration)} video → ~${formatTime(waitTime)} (YouTube 1x safe)`));
+  const waitTime = (rate >= 2 ? Math.ceil(ytDuration / 2) : ytDuration) + 30;
+  log(chalk.blue(`  ~${formatTime(ytDuration)} video → ~${formatTime(waitTime)} (${rate}x)`));
 
   if (stats) {
     stats.currentVideoDuration = ytDuration;
