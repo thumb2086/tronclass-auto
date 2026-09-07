@@ -26,7 +26,20 @@ async function getUncompleted(page, courseId) {
       const a = actScope.activity;
       let completeness = '';
       try { completeness = scope.getActivityCompleteness(a); } catch (e) {}
-      if (completeness !== 'full') {
+      if (completeness === 'full') return;
+
+      let isUpcoming = false;
+      let isExpired = false;
+      try { isUpcoming = scope.activityUpcoming(a); } catch (e) {}
+      try { isExpired = scope.activityExpired(a); } catch (e) {}
+      if (isUpcoming) return;
+
+      let timeRange = '';
+      try {
+        const txt = actEl.textContent || '';
+        const tm = txt.match(/時間:\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s*~\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/);
+        if (tm) timeRange = tm[0];
+      } catch (e) {}
         let durationSec = 0;
         try {
           const durText = actEl.querySelector('.activity-attribute');
@@ -48,9 +61,9 @@ async function getUncompleted(page, courseId) {
           id: a.id,
           title: (a.title || '').substring(0, 60),
           type: a.type || '',
-          durationSec
+          durationSec,
+          timeRange
         });
-      }
     });
     return result;
   });
