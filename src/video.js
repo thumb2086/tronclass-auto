@@ -160,7 +160,28 @@ async function watchYouTube(page, stats) {
   }
 
   log(chalk.green('  Done ✓'));
-  await page.waitForTimeout(2000);
+  log(chalk.gray('  Syncing with platform...'));
+
+  for (let i = 0; i < 5; i++) {
+    await page.evaluate(() => {
+      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+      if (!f) return;
+      try {
+        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [670, true] }), '*');
+        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
+      } catch(e) {}
+    });
+    await page.waitForTimeout(3000);
+    await page.evaluate(() => {
+      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+      if (!f) return;
+      try {
+        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*');
+      } catch(e) {}
+    });
+    await page.waitForTimeout(2000);
+  }
+
   if (stats) stats.videosWatched++;
   return true;
 }
