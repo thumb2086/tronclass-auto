@@ -71,23 +71,37 @@ async function watchYouTube(page, stats) {
     };
 
     log(chalk.blue('  Starting video...'));
-    await evalYT("() => { const p = document.querySelector('#movie_player'); if (p) p.playVideo(); }");
-    await page.waitForTimeout(3000);
 
-    const state1 = await evalYT("() => { const p = document.querySelector('#movie_player'); return p ? p.getPlayerState() : -1; }");
-    if (state1 !== 1) {
-      log(chalk.yellow('  Retrying play...'));
-      await evalYT("() => { const p = document.querySelector('#movie_player'); if (p) p.playVideo(); }");
+    let playerReady = false;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const ready = await evalYT("() => { const p = document.querySelector('#movie_player'); return p && typeof p.playVideo === 'function'; }");
+      if (ready) { playerReady = true; break; }
+      log(chalk.gray(`  Waiting for player... (${attempt + 1}/10)`));
       await page.waitForTimeout(3000);
     }
 
-    await evalYT("() => { const p = document.querySelector('#movie_player'); if (p) { p.mute(); p.setPlaybackRate(2); } }");
+    if (!playerReady) {
+      log(chalk.yellow('  YouTube player not loaded'));
+      return false;
+    }
+
+    await evalYT("() => { const p = document.querySelector('#movie_player'); p.playVideo(); }");
+    await page.waitForTimeout(3000);
+
+    const state1 = await evalYT("() => document.querySelector('#movie_player').getPlayerState()");
+    if (state1 !== 1) {
+      log(chalk.yellow('  Retrying play...'));
+      await evalYT("() => { const p = document.querySelector('#movie_player'); p.playVideo(); }");
+      await page.waitForTimeout(5000);
+    }
+
+    await evalYT("() => { const p = document.querySelector('#movie_player'); p.mute(); p.setPlaybackRate(2); }");
     await page.waitForTimeout(2000);
 
-    rate = await evalYT("() => { const p = document.querySelector('#movie_player'); return p ? p.getPlaybackRate() : 1; }") || 1;
+    rate = await evalYT("() => document.querySelector('#movie_player').getPlaybackRate()") || 1;
     log(chalk.blue(`  Speed: ${rate}x`));
 
-    const state2 = await evalYT("() => { const p = document.querySelector('#movie_player'); return p ? p.getPlayerState() : -1; }");
+    const state2 = await evalYT("() => document.querySelector('#movie_player').getPlayerState()");
     if (state2 === 1) {
       log(chalk.green('  Playing ✓'));
     } else {
