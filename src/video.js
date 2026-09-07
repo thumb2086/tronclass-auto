@@ -116,11 +116,6 @@ async function watchYouTube(page, stats) {
   } catch (e) {
     log(chalk.yellow(`  YouTube error: ${e.message}`));
   }
-      log(chalk.yellow(`  State: ${state2}`));
-    }
-  } catch (e) {
-    log(chalk.yellow(`  YouTube error: ${e.message}`));
-  }
 
   await page.waitForTimeout(2000);
 
