@@ -155,34 +155,40 @@ async function processCourse(page, courseId, stats) {
       }
       const success = await watchVideo(page, stats);
       if (success) {
-        await page.waitForTimeout(10000);
-        await page.goto(`${BASE_URL}/course/${courseId}/content#/`, {
-          waitUntil: 'domcontentloaded', timeout: 15000
-        }).catch(() => {});
-        await page.waitForTimeout(5000);
+        let serverComplete = false;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          await page.waitForTimeout(10000);
+          await page.goto(`${BASE_URL}/course/${courseId}/content#/`, {
+            waitUntil: 'domcontentloaded', timeout: 15000
+          }).catch(() => {});
+          await page.waitForTimeout(5000);
 
-        const serverComplete = await page.evaluate((actId) => {
-          const el = document.querySelector('.learning-activities');
-          if (!el) return false;
-          const scope = angular.element(el).scope();
-          if (!scope) return false;
-          const activities = document.querySelectorAll('.learning-activity.sortable');
-          for (const actEl of activities) {
-            const actScope = angular.element(actEl).scope();
-            if (!actScope || !actScope.activity) continue;
-            if (actScope.activity.id == actId) {
-              try { return scope.getActivityCompleteness(actScope.activity) === 'full'; } catch (e) {}
+          serverComplete = await page.evaluate((actId) => {
+            const el = document.querySelector('.learning-activities');
+            if (!el) return false;
+            const scope = angular.element(el).scope();
+            if (!scope) return false;
+            const activities = document.querySelectorAll('.learning-activity.sortable');
+            for (const actEl of activities) {
+              const actScope = angular.element(actEl).scope();
+              if (!actScope || !actScope.activity) continue;
+              if (actScope.activity.id == actId) {
+                try { return scope.getActivityCompleteness(actScope.activity) === 'full'; } catch (e) {}
+              }
             }
-          }
-          return false;
-        }, act.id);
+            return false;
+          }, act.id);
+
+          if (serverComplete) break;
+          console.log(chalk.gray(`  Checking server... (${attempt + 1}/5)`));
+        }
 
         if (serverComplete) {
           markDone(courseId, act.id);
           done++;
           console.log(chalk.green('  ✓ Saved (server confirmed)'));
         } else {
-          console.log(chalk.yellow('  Server not confirmed, skipping'));
+          console.log(chalk.yellow('  Server not confirmed after retries, skipping'));
           triedIds.add(act.id);
           fail++;
         }

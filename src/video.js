@@ -70,42 +70,39 @@ async function watchYouTube(page, stats) {
     await ytFrame.click({ timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(5000);
 
-    await page.evaluate(() => {
-      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-      if (!f) return;
-      f.contentWindow.postMessage('{"event":"listening"}', '*');
-    });
-    await page.waitForTimeout(3000);
+    const postMsg = async (msg) => {
+      await page.evaluate((m) => {
+        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+        if (f) f.contentWindow.postMessage(m, '*');
+      }, typeof msg === 'string' ? msg : JSON.stringify(msg));
+    };
 
-    await page.evaluate(() => {
-      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-      if (!f) return;
-      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
-    });
+    await postMsg('{"event":"listening"}');
+    await page.waitForTimeout(2000);
+    await postMsg({ event: 'command', func: 'mute', args: [] });
+    await page.waitForTimeout(1000);
+    await postMsg({ event: 'command', func: 'setPlaybackRate', args: [2] });
+    await page.waitForTimeout(2000);
+    await postMsg({ event: 'command', func: 'playVideo', args: [] });
     await page.waitForTimeout(5000);
 
     rate = await page.evaluate(() => {
       return new Promise((resolve) => {
         const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
         if (!f) { resolve(1); return; }
-
         let resolved = false;
         const handler = (e) => {
           try {
             const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-            if (d.event === 'infoDelivery' && d.info && !resolved) {
+            if (d.event === 'infoDelivery' && d.info && d.info.playbackRate !== undefined && !resolved) {
               resolved = true;
               window.removeEventListener('message', handler);
-              resolve(d.info.playbackRate || 1);
+              resolve(d.info.playbackRate);
             }
           } catch(e) {}
         };
         window.addEventListener('message', handler);
-
-        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
-        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setPlaybackRate', args: [2] }), '*');
         f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getPlaybackRate', args: [] }), '*');
-
         setTimeout(() => { if (!resolved) { resolved = true; window.removeEventListener('message', handler); resolve(1); } }, 5000);
       });
     });
@@ -187,8 +184,8 @@ async function watchYouTube(page, stats) {
     return 180;
   });
 
-  const waitTime = ytDuration + 30;
-  log(chalk.blue(`  ~${formatTime(ytDuration)} video → ~${formatTime(waitTime)} (2x playback, full wait)`));
+  const waitTime = (rate >= 2 ? Math.ceil(ytDuration / 2) : ytDuration) + 30;
+  log(chalk.blue(`  ~${formatTime(ytDuration)} video → ~${formatTime(waitTime)} (${rate}x)`));
 
   if (stats) {
     stats.currentVideoDuration = ytDuration;
