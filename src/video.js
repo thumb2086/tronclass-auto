@@ -57,6 +57,7 @@ async function watchVideo(page, stats) {
 
 async function watchYouTube(page, stats) {
   log(chalk.blue('  YouTube embed'));
+  let rate = 1;
 
   try {
     const ytFrame = page.locator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
@@ -91,15 +92,15 @@ async function watchYouTube(page, stats) {
     });
     await page.waitForTimeout(2000);
 
-    const rate = await page.evaluate(() => {
+    rate = await page.evaluate(() => {
       return new Promise((resolve) => {
         const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
         if (!f) { resolve(1); return; }
         const handler = (e) => {
-  let rate = 1;
-  try {
+          try {
             const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
             if (d.event === 'infoDelivery' && d.info && d.info.playbackRate) {
+              window.removeEventListener('message', handler);
               resolve(d.info.playbackRate);
             }
           } catch(e) {}
@@ -109,7 +110,7 @@ async function watchYouTube(page, stats) {
         setTimeout(() => { window.removeEventListener('message', handler); resolve(1); }, 3000);
       });
     });
-    log(chalk.blue(`  Speed: ${rate}x ✓`));
+    log(chalk.blue(`  Speed: ${rate}x`));
   } catch (e) {
     log(chalk.yellow(`  YouTube setup error: ${e.message}`));
   }

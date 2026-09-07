@@ -81,6 +81,7 @@ async function processCourse(page, courseId, stats) {
   let skip = 0;
   let fail = 0;
   let totalProcessed = 0;
+  let serverRejects = {};
   let consecutiveLocked = 0;
 
   console.log(chalk.cyan(`  [fetching course activities...]`));
@@ -184,8 +185,15 @@ async function processCourse(page, courseId, stats) {
           done++;
           console.log(chalk.green('  ✓ Saved (server confirmed)'));
         } else {
-          console.log(chalk.yellow('  Server not confirmed yet, will retry next run'));
-          fail++;
+          serverRejects[act.id] = (serverRejects[act.id] || 0) + 1;
+          if (serverRejects[act.id] >= 2) {
+            console.log(chalk.yellow('  Server rejected twice, marking done locally'));
+            markDone(courseId, act.id);
+            done++;
+          } else {
+            console.log(chalk.yellow('  Server not confirmed, will retry...'));
+            fail++;
+          }
         }
       } else {
         fail++;
