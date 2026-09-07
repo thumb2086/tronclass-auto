@@ -12,6 +12,15 @@ function formatTime(seconds) {
   return `${s}s`;
 }
 
+function progress(msg) {
+  process.stdout.write('\r\x1b[K' + msg);
+}
+
+function log(msg) {
+  process.stdout.write('\n');
+  progress(msg);
+}
+
 async function watchVideo(page, stats) {
   const hasVideo = await page.evaluate(() => document.querySelector('video') !== null);
   if (!hasVideo) {
@@ -105,7 +114,7 @@ async function watchVideo(page, stats) {
       } else {
         etaStr = chalk.gray(` | ${formatTime(remaining)} left`);
       }
-      log(chalk.blue(`  ${bar} ${String(pct).padStart(3)}%  (${formatTime(elapsed)})${etaStr}`));
+      progress(`${bar} ${String(pct).padStart(3)}%  (${formatTime(elapsed)})${etaStr}`);
       lastPct = pct;
     }
 
@@ -115,9 +124,6 @@ async function watchVideo(page, stats) {
     }
 
     if (state.stalled) {
-      if (elapsed % 15 === 0) {
-        log(chalk.gray(`  Buffering... (${formatTime(elapsed)})`));
-      }
       continue;
     }
 
@@ -143,10 +149,6 @@ async function watchVideo(page, stats) {
   await page.waitForTimeout(3000);
   if (stats) stats.videosWatched++;
   return true;
-}
-
-function log(msg) {
-  console.log(msg);
 }
 
 function printReport(stats) {

@@ -130,7 +130,7 @@ async function showStatus() {
   const { chromium } = re('playwright');
   const { ensureBrowser } = re('./browser');
   const exePath = await ensureBrowser();
-  const launchOpts = { headless: true, slowMo: 50 };
+  const launchOpts = { headless: true, slowMo: 50, args: ['--disable-gpu', '--disable-software-rasterizer'] };
   if (exePath) launchOpts.executablePath = exePath;
   const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext();
@@ -195,7 +195,16 @@ async function launchBrowser(headless) {
   const { chromium } = re('playwright');
   const { ensureBrowser } = re('./browser');
   const exePath = await ensureBrowser();
-  const launchOpts = { headless, slowMo: 50 };
+  const launchOpts = {
+    headless,
+    slowMo: 50,
+    args: [
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-features=MediaFoundationVideoCapture,HardwareMediaKeyHandling',
+    ]
+  };
   if (exePath) launchOpts.executablePath = exePath;
   const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext({

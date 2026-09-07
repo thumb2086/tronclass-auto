@@ -85,7 +85,7 @@ async function autoLogin(baseUrl) {
   const exePath = await ensureBrowser();
 
   const { chromium } = require('playwright');
-  const launchOpts = { headless: false, slowMo: 50 };
+  const launchOpts = { headless: false, slowMo: 50, args: ['--disable-background-timer-throttling'] };
   if (exePath) launchOpts.executablePath = exePath;
 
   const browser = await chromium.launch(launchOpts);
