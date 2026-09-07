@@ -1,6 +1,6 @@
 {
   "name": "tronclass-auto",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "自動觀看 eclass/TronClass 影片、填寫表單的 CLI 工具",
   "main": "src/index.js",
   "bin": {

@@ -32,14 +32,21 @@ async function getUncompleted(page, courseId) {
       let isExpired = false;
       try { isUpcoming = scope.activityUpcoming(a); } catch (e) {}
       try { isExpired = scope.activityExpired(a); } catch (e) {}
-      if (isUpcoming) return;
 
       let timeRange = '';
+      let startTime = '';
       try {
         const txt = actEl.textContent || '';
         const tm = txt.match(/時間:\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s*~\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/);
-        if (tm) timeRange = tm[0];
+        if (tm) {
+          timeRange = tm[0];
+          startTime = tm[1];
+        }
       } catch (e) {}
+
+      const now = new Date();
+      const startDate = startTime ? new Date(startTime.replace(' ', 'T')) : null;
+      if (isUpcoming && startDate && startDate > now) return;
         let durationSec = 0;
         try {
           const durText = actEl.querySelector('.activity-attribute');
@@ -73,25 +80,30 @@ async function processCourse(page, courseId, stats) {
   let done = 0;
   let skip = 0;
   let fail = 0;
+  let totalProcessed = 0;
 
-  const uncompleted = await getUncompleted(page, courseId);
-  const videos = uncompleted.filter(u => u.type === 'online_video');
-  const remaining = videos.filter(v => !isDone(courseId, v.id));
+  console.log(chalk.cyan(`  [fetching course activities...]`));
 
-  console.log(chalk.cyan(`  Uncompleted: ${videos.length} videos, remaining: ${remaining.length}`));
+  while (true) {
+    const uncompleted = await getUncompleted(page, courseId);
+    const videos = uncompleted.filter(u => u.type === 'online_video');
+    const remaining = videos.filter(v => !isDone(courseId, v.id));
 
-  const totalDuration = remaining.reduce((sum, v) => sum + (v.durationSec || 120), 0);
-  const estWatchTime = Math.ceil(totalDuration / 2) + remaining.length * 15;
-  console.log(chalk.cyan(`  預估時間: ${formatTime(estWatchTime)}`));
+    if (remaining.length === 0) break;
 
-  if (stats) {
-    stats.remainingVideos = remaining.length;
-    stats.estimatedTimeForRemaining = estWatchTime;
-  }
+    if (totalProcessed === 0) {
+      console.log(chalk.cyan(`  Available: ${videos.length} videos, remaining: ${remaining.length}`));
+      const totalDuration = remaining.reduce((sum, v) => sum + (v.durationSec || 120), 0);
+      const estWatchTime = Math.ceil(totalDuration / 2) + remaining.length * 15;
+      console.log(chalk.cyan(`  預估時間: ${formatTime(estWatchTime)}`));
+      if (stats) {
+        stats.remainingVideos = remaining.length;
+        stats.estimatedTimeForRemaining = estWatchTime;
+      }
+    }
 
-  for (let i = 0; i < remaining.length; i++) {
-    const act = remaining[i];
-    console.log(chalk.white(`\n  [${i + 1}/${remaining.length}] ${act.title}`));
+    const act = remaining[0];
+    console.log(chalk.white(`\n  [${totalProcessed + 1}] ${act.title}`));
 
     const url = `${BASE_URL}/course/${courseId}/learning-activity/full-screen#/${act.id}`;
     try {
@@ -100,15 +112,17 @@ async function processCourse(page, courseId, stats) {
     await page.waitForTimeout(5000);
 
     if (!page.url().includes('learning-activity')) {
-      console.log(chalk.yellow('    [WARN] Failed to load activity page'));
+      console.log(chalk.yellow('  [WARN] Failed to load, locked or skipped'));
       skip++;
+      markDone(courseId, act.id);
+      totalProcessed++;
       continue;
     }
 
     try {
       const thisDuration = Math.ceil((act.durationSec || 120) / 2) + 15;
       if (stats) {
-        stats.remainingVideos = remaining.length - i - 1;
+        stats.remainingVideos--;
         stats.estimatedTimeForRemaining -= thisDuration;
         if (stats.estimatedTimeForRemaining < 0) stats.estimatedTimeForRemaining = 0;
       }
@@ -116,15 +130,16 @@ async function processCourse(page, courseId, stats) {
       if (success) {
         markDone(courseId, act.id);
         done++;
-        console.log(chalk.green('    ✓ Saved'));
+        console.log(chalk.green('  ✓ Saved'));
       } else {
         fail++;
       }
     } catch (e) {
-      console.log(chalk.red(`    [ERROR] ${e.message}`));
+      console.log(chalk.red(`  [ERROR] ${e.message}`));
       fail++;
     }
 
+    totalProcessed++;
     await page.waitForTimeout(2000);
   }
 
