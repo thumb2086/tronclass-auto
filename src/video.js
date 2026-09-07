@@ -58,31 +58,39 @@ async function watchVideo(page, stats) {
 async function watchYouTube(page, stats) {
   log(chalk.blue('  YouTube embed'));
 
-  const speedSet = await page.evaluate(() => {
-    const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-    if (!f) return false;
-    const src = f.src || '';
-    if (!src.includes('enablejsapi=1')) return false;
-    try {
-      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
-      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setPlaybackRate', args: [2] }), '*');
-      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
-      return true;
-    } catch (e) { return false; }
-  });
-
-  try {
-    const frame = page.frameLocator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-    const playBtn = frame.locator('.ytp-large-play-button, .ytp-play-button, button[aria-label*="Play"], button[aria-label*="play"]');
-    await playBtn.first().click({ timeout: 5000 }).catch(() => {});
-  } catch (e) {}
-
   try {
     const ytFrame = page.locator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-    await ytFrame.click({ timeout: 3000 }).catch(() => {});
-  } catch (e) {}
+    await ytFrame.click({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(2000);
 
-  await page.waitForTimeout(3000);
+    const frame = page.frameLocator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+    const playBtn = frame.locator('.ytp-large-play-button');
+    await playBtn.click({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(2000);
+
+    try {
+      await frame.locator('.ytp-settings-button').click({ timeout: 3000 });
+      await page.waitForTimeout(500);
+      await frame.locator('.ytp-menuitem:has-text("播放速度"), .ytp-menuitem:has-text("Playback speed")').click({ timeout: 3000 });
+      await page.waitForTimeout(500);
+      await frame.locator('.ytp-menuitem:has-text("2"), .ytp-menuitem:has-text("2x")').click({ timeout: 3000 });
+      log(chalk.blue('  Speed: 2x ✓'));
+    } catch (e) {
+      log(chalk.yellow('  Speed: 1x (settings menu unavailable)'));
+    }
+
+    try {
+      await frame.locator('.ytp-settings-button').click({ timeout: 2000 });
+      await page.waitForTimeout(500);
+      await frame.locator('.ytp-menuitem:has-text("字幕"), .ytp-menuitem:has-text("Subtitles"), .ytp-menuitem:has-text("CC")').click({ timeout: 2000 }).catch(() => {});
+      await frame.locator('.ytp-menuitem:has-text("關閉"), .ytp-menuitem:has-text("Off"), .ytp-menuitem:has-text("None")').click({ timeout: 2000 }).catch(() => {});
+      await page.keyboard.press('Escape');
+    } catch (e) {}
+  } catch (e) {
+    log(chalk.yellow('  YouTube setup failed, falling back'));
+  }
+
+  await page.waitForTimeout(2000);
 
   const ytDuration = await page.evaluate(() => {
     const actText = document.querySelector('.activity-attribute, [class*="attribute"]');
@@ -93,9 +101,8 @@ async function watchYouTube(page, stats) {
     return 180;
   });
 
-  const speed = speedSet ? 2 : 1;
-  const waitTime = Math.ceil(ytDuration / speed) + 30;
-  log(chalk.blue(`  ~${formatTime(ytDuration)} video → ~${formatTime(waitTime)} (${speed}x${speedSet ? '' : ', no speed control'})`));
+  const waitTime = Math.ceil(ytDuration / 2) + 30;
+  log(chalk.blue(`  ~${formatTime(ytDuration)} video → ~${formatTime(waitTime)} (2x)`));
 
   let elapsed = 0;
   let lastPct = -1;
