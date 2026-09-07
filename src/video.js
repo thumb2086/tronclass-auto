@@ -15,11 +15,11 @@ function formatTime(seconds) {
 async function watchVideo(page, stats) {
   const hasVideo = await page.evaluate(() => document.querySelector('video') !== null);
   if (!hasVideo) {
-    log(chalk.yellow('    [VIDEO] No video element'));
+    log(chalk.yellow('  No video element'));
     return false;
   }
 
-  log(chalk.blue('    [VIDEO] Muted + 2x speed'));
+  log(chalk.blue('  Muted + 2x'));
 
   await page.evaluate(() => {
     document.querySelectorAll('video').forEach(v => {
@@ -38,7 +38,7 @@ async function watchVideo(page, stats) {
   });
 
   if (!isPlaying) {
-    log(chalk.yellow('    [VIDEO] Clicking play...'));
+    log(chalk.yellow('  Clicking play...'));
     await page.evaluate(() => {
       document.querySelectorAll('[class*="play"], .vjs-big-play-button, button').forEach(btn => {
         if (btn.offsetParent && (btn.className.includes('play') || btn.className.includes('Play'))) {
@@ -56,14 +56,14 @@ async function watchVideo(page, stats) {
   });
 
   if (!duration || duration <= 0) {
-    log(chalk.yellow('    [VIDEO] Cannot get duration, waiting 30s...'));
+    log(chalk.yellow('  Cannot get duration, waiting 30s...'));
     await page.waitForTimeout(30000);
     if (stats) stats.videosWatched++;
     return true;
   }
 
   const waitTime = (duration / 2) + 15;
-  log(chalk.blue(`    [VIDEO] ${formatTime(duration)} video, waiting ~${formatTime(waitTime)} (2x)`));
+  log(chalk.blue(`  ${formatTime(duration)} video → ~${formatTime(waitTime)} (2x)`));
 
   if (stats) {
     stats.currentVideoDuration = duration / 2;
@@ -93,26 +93,30 @@ async function watchVideo(page, stats) {
 
     if (state.p > lastPct) {
       const pct = state.p;
+      const barWidth = 20;
+      const filled = Math.floor(barWidth * pct / 100);
+      const empty = barWidth - filled;
+      const bar = chalk.green('█'.repeat(filled)) + chalk.gray('░'.repeat(empty));
       const remaining = Math.max(0, waitTime - elapsed);
       let etaStr = '';
       if (stats && stats.remainingVideos > 0) {
         const totalRemaining = remaining + stats.estimatedTimeForRemaining;
-        etaStr = chalk.gray(` | ETA: ${formatTime(totalRemaining)}`);
+        etaStr = chalk.gray(` | ETA ${formatTime(totalRemaining)}`);
       } else {
-        etaStr = chalk.gray(` | ~${formatTime(remaining)} left`);
+        etaStr = chalk.gray(` | ${formatTime(remaining)} left`);
       }
-      log(chalk.blue(`    [VIDEO] ${pct}% (${formatTime(elapsed)})${etaStr}`));
+      log(chalk.blue(`  ${bar} ${String(pct).padStart(3)}%  (${formatTime(elapsed)})${etaStr}`));
       lastPct = pct;
     }
 
     if (state.e) {
-      log(chalk.green('    [VIDEO] 100% Finished'));
+      log(chalk.green('  Done ✓'));
       break;
     }
 
     if (state.stalled) {
       if (elapsed % 15 === 0) {
-        log(chalk.gray(`    [VIDEO] Buffering... (${formatTime(elapsed)})`));
+        log(chalk.gray(`  Buffering... (${formatTime(elapsed)})`));
       }
       continue;
     }
@@ -127,10 +131,10 @@ async function watchVideo(page, stats) {
 
       restartCount++;
       if (restartCount > 10) {
-        log(chalk.red('    [VIDEO] Too many restarts, giving up'));
+        log(chalk.red('  Too many restarts, giving up'));
         return false;
       }
-      log(chalk.yellow(`    [VIDEO] Paused, restarting (#${restartCount})...`));
+      log(chalk.yellow(`  Paused, restarting (#${restartCount})...`));
       await page.evaluate(() => document.querySelector('video').play());
       await page.waitForTimeout(1000);
     }

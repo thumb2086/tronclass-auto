@@ -103,7 +103,7 @@ async function processCourse(page, courseId, stats) {
       if (success) {
         markDone(courseId, act.id);
         done++;
-        console.log(chalk.green('    [OK] Saved'));
+        console.log(chalk.green('    ✓ Saved'));
       } else {
         fail++;
       }
