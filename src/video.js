@@ -56,15 +56,19 @@ async function watchVideo(page, stats) {
 }
 
 async function watchYouTube(page, stats) {
-  log(chalk.blue('  YouTube embed (1x, platform tracks progress)'));
+  log(chalk.blue('  YouTube embed'));
 
-  await page.evaluate(() => {
+  const speedSet = await page.evaluate(() => {
     const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-    if (!f) return;
+    if (!f) return false;
+    const src = f.src || '';
+    if (!src.includes('enablejsapi=1')) return false;
     try {
       f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
+      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setPlaybackRate', args: [2] }), '*');
       f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
-    } catch (e) {}
+      return true;
+    } catch (e) { return false; }
   });
 
   try {
@@ -89,8 +93,9 @@ async function watchYouTube(page, stats) {
     return 180;
   });
 
-  const waitTime = ytDuration + 30;
-  log(chalk.blue(`  ~${formatTime(ytDuration)} video → waiting ~${formatTime(waitTime)} (1x, YouTube)`));
+  const speed = speedSet ? 2 : 1;
+  const waitTime = Math.ceil(ytDuration / speed) + 30;
+  log(chalk.blue(`  ~${formatTime(ytDuration)} video → ~${formatTime(waitTime)} (${speed}x${speedSet ? '' : ', no speed control'})`));
 
   let elapsed = 0;
   let lastPct = -1;
