@@ -25,18 +25,22 @@ async function detectPlayerType(page) {
     const v = document.querySelector('video');
     if (v) return 'html5';
 
+    const yt = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"], iframe[src*="vimeo"]');
+    if (yt) return 'youtube';
+
     for (const f of document.querySelectorAll('iframe')) {
-      const src = (f.src || f.getAttribute('data-src') || '').toLowerCase();
-      if (src.includes('youtube') || src.includes('youtu.be')) return 'youtube';
-      if (src.includes('vimeo')) return 'vimeo';
       try {
-        if (f.contentDocument) {
-          const fv = f.contentDocument.querySelector('video');
-          if (fv) return 'html5';
-        }
+        if (f.contentDocument && f.contentDocument.querySelector('video')) return 'html5';
       } catch (e) {}
     }
     return 'none';
+  }).then(async (type) => {
+    if (type === 'none') {
+      for (const f of page.frames) {
+        if (f.url && (f.url.includes('youtube') || f.url.includes('youtu.be'))) return 'youtube';
+      }
+    }
+    return type;
   });
 }
 
@@ -60,114 +64,45 @@ async function watchYouTube(page, stats) {
   let rate = 1;
 
   try {
-    await page.evaluate(() => {
-      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-      if (f) f.scrollIntoView({ block: 'center' });
-    });
-    await page.waitForTimeout(2000);
+    let ytFrame = null;
+    for (const f of page.frames) {
+      if (f.url && (f.url.includes('youtube') || f.url.includes('youtu.be'))) {
+        ytFrame = f;
+        break;
+      }
+    }
 
-    const ytFrame = page.locator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-    await ytFrame.click({ timeout: 5000 }).catch(() => {});
-    await page.waitForTimeout(5000);
+    if (!ytFrame) {
+      log(chalk.yellow('  YouTube frame not found'));
+      return false;
+    }
 
-    const postMsg = async (msg) => {
-      await page.evaluate((m) => {
-        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-        if (f) f.contentWindow.postMessage(m, '*');
-      }, typeof msg === 'string' ? msg : JSON.stringify(msg));
+    const evalYT = async (code) => {
+      return await ytFrame.evaluate(code).catch(() => null);
     };
 
-    await postMsg('{"event":"listening"}');
-    await page.waitForTimeout(2000);
-    await postMsg({ event: 'command', func: 'mute', args: [] });
-    await page.waitForTimeout(1000);
-    await postMsg({ event: 'command', func: 'setPlaybackRate', args: [2] });
-    await page.waitForTimeout(2000);
-    await postMsg({ event: 'command', func: 'playVideo', args: [] });
-    await page.waitForTimeout(5000);
+    log(chalk.blue('  Starting video...'));
+    await evalYT("() => { const p = document.querySelector('#movie_player'); if (p) p.playVideo(); }");
+    await page.waitForTimeout(3000);
 
-    rate = await page.evaluate(() => {
-      return new Promise((resolve) => {
-        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-        if (!f) { resolve(1); return; }
-        let resolved = false;
-        const handler = (e) => {
-          try {
-            const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-            if (d.event === 'infoDelivery' && d.info && d.info.playbackRate !== undefined && !resolved) {
-              resolved = true;
-              window.removeEventListener('message', handler);
-              resolve(d.info.playbackRate);
-            }
-          } catch(e) {}
-        };
-        window.addEventListener('message', handler);
-        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getPlaybackRate', args: [] }), '*');
-        setTimeout(() => { if (!resolved) { resolved = true; window.removeEventListener('message', handler); resolve(1); } }, 5000);
-      });
-    });
+    const state1 = await evalYT("() => { const p = document.querySelector('#movie_player'); return p ? p.getPlayerState() : -1; }");
+    if (state1 !== 1) {
+      log(chalk.yellow('  Retrying play...'));
+      await evalYT("() => { const p = document.querySelector('#movie_player'); if (p) p.playVideo(); }");
+      await page.waitForTimeout(3000);
+    }
+
+    await evalYT("() => { const p = document.querySelector('#movie_player'); if (p) { p.mute(); p.setPlaybackRate(2); } }");
+    await page.waitForTimeout(2000);
+
+    rate = await evalYT("() => { const p = document.querySelector('#movie_player'); return p ? p.getPlaybackRate() : 1; }") || 1;
     log(chalk.blue(`  Speed: ${rate}x`));
 
-    const isPlaying = await page.evaluate(() => {
-      return new Promise((resolve) => {
-        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-        if (!f) { resolve(false); return; }
-        let resolved = false;
-        const handler = (e) => {
-          try {
-            const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-            if (d.event === 'infoDelivery' && d.info && !resolved) {
-              resolved = true;
-              window.removeEventListener('message', handler);
-              resolve(d.info.currentTime > 0);
-            }
-          } catch(e) {}
-        };
-        window.addEventListener('message', handler);
-        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getCurrentTime', args: [] }), '*');
-        setTimeout(() => { if (!resolved) { resolved = true; window.removeEventListener('message', handler); resolve(false); } }, 5000);
-      });
-    });
-
-    if (isPlaying) {
+    const state2 = await evalYT("() => { const p = document.querySelector('#movie_player'); return p ? p.getPlayerState() : -1; }");
+    if (state2 === 1) {
       log(chalk.green('  Playing ✓'));
     } else {
-      log(chalk.yellow('  Not playing, retrying...'));
-      await page.evaluate(() => {
-        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-        if (!f) return;
-        f.contentWindow.postMessage('{"event":"listening"}', '*');
-      });
-      await page.waitForTimeout(3000);
-      await page.evaluate(() => {
-        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-        if (!f) return;
-        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
-      });
-      await page.waitForTimeout(5000);
-
-      const retry = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-          if (!f) { resolve(false); return; }
-          let resolved = false;
-          const handler = (e) => {
-            try {
-              const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-              if (d.event === 'infoDelivery' && d.info && !resolved) {
-                resolved = true;
-                window.removeEventListener('message', handler);
-                resolve(d.info.currentTime > 0);
-              }
-            } catch(e) {}
-          };
-          window.addEventListener('message', handler);
-          f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getCurrentTime', args: [] }), '*');
-          setTimeout(() => { if (!resolved) { resolved = true; window.removeEventListener('message', handler); resolve(false); } }, 5000);
-        });
-      });
-      if (retry) log(chalk.green('  Playing ✓'));
-      else log(chalk.yellow('  Could not verify playback'));
+      log(chalk.yellow(`  State: ${state2} (may still be loading)`));
     }
   } catch (e) {
     log(chalk.yellow(`  YouTube error: ${e.message}`));
