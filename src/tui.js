@@ -2,6 +2,7 @@ const inquirer = require('inquirer');
 const chalk = require('chalk');
 const { loadConfig, saveConfig, BASE_URL } = require('./config');
 const { loadCookies } = require('./auth');
+const pkg = require('../package.json');
 
 function box(lines, width = 52) {
   const top = '╔' + '═'.repeat(width - 2) + '╗';
@@ -25,7 +26,7 @@ async function mainMenu() {
     const config = loadConfig();
 
     box([
-      chalk.bold.white('tronclass-auto  v1.1.0'),
+      chalk.bold.white(`tronclass-auto  v${pkg.version}`),
       chalk.gray('自動觀看 eclass/TronClass 影片'),
       '',
       `課程: ${chalk.cyan(config.courses.length + ' 個')}  |  Cookie: ${chalk.green('✓')}  |  倍速: ${chalk.yellow(config.playbackRate || 2)}x`,
