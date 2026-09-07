@@ -110,27 +110,33 @@ async function processCourse(page, courseId, stats) {
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
     } catch (e) {}
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(8000);
 
     if (!page.url().includes('learning-activity')) {
-      console.log(chalk.yellow('  Locked (page redirect), skipping rest'));
+      console.log(chalk.yellow('  Page redirect, skipping'));
       markLocked(courseId, act.id);
       break;
     }
 
-    const hasVideo = await page.evaluate(() => document.querySelector('video') !== null);
-    if (!hasVideo) {
-      consecutiveLocked++;
-      if (consecutiveLocked >= 2) {
-        console.log(chalk.yellow('  Locked (no video), stopping this course'));
-        markLocked(courseId, act.id);
-        break;
+    const hasVideo = await page.evaluate(() => {
+      if (document.querySelector('video')) return true;
+      for (const f of document.querySelectorAll('iframe')) {
+        try { if (f.contentDocument && f.contentDocument.querySelector('video')) return true; } catch (e) {}
       }
-      console.log(chalk.yellow('  No video, might be loading... waiting'));
-      await page.waitForTimeout(5000);
-      const hasVideoNow = await page.evaluate(() => document.querySelector('video') !== null);
+      return false;
+    });
+    if (!hasVideo) {
+      console.log(chalk.yellow('  No video, waiting more...'));
+      await page.waitForTimeout(10000);
+      const hasVideoNow = await page.evaluate(() => {
+        if (document.querySelector('video')) return true;
+        for (const f of document.querySelectorAll('iframe')) {
+          try { if (f.contentDocument && f.contentDocument.querySelector('video')) return true; } catch (e) {}
+        }
+        return false;
+      });
       if (!hasVideoNow) {
-        console.log(chalk.yellow('  Still no video, locked'));
+        console.log(chalk.yellow('  Still no video, skipping (not a video activity)'));
         markLocked(courseId, act.id);
         break;
       }
