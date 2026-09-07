@@ -62,21 +62,62 @@ async function watchYouTube(page, stats) {
   try {
     const ytFrame = page.locator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
     await ytFrame.click({ timeout: 5000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
 
     await page.evaluate(() => {
       const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
       if (!f) return;
       f.contentWindow.postMessage('{"event":"listening"}', '*');
     });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
     await page.evaluate(() => {
       const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
       if (!f) return;
       f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
     });
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(3000);
+
+    const isPlaying = await page.evaluate(() => {
+      return new Promise((resolve) => {
+        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+        if (!f) { resolve(false); return; }
+        const handler = (e) => {
+          try {
+            const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+            if (d.event === 'infoDelivery' && d.info) {
+              window.removeEventListener('message', handler);
+              resolve(d.info.currentTime > 0);
+            }
+          } catch(e) {}
+        };
+        window.addEventListener('message', handler);
+        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getCurrentTime', args: [] }), '*');
+        setTimeout(() => { window.removeEventListener('message', handler); resolve(false); }, 5000);
+      });
+    });
+
+    if (!isPlaying) {
+      log(chalk.yellow('  Player not responding, retrying click...'));
+      try {
+        const frame = page.frameLocator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+        await frame.locator('.ytp-large-play-button, .ytp-play-button').first().click({ timeout: 5000 }).catch(() => {});
+      } catch(e) {}
+      await page.waitForTimeout(3000);
+
+      await page.evaluate(() => {
+        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+        if (!f) return;
+        f.contentWindow.postMessage('{"event":"listening"}', '*');
+      });
+      await page.waitForTimeout(2000);
+      await page.evaluate(() => {
+        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+        if (!f) return;
+        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
+      });
+      await page.waitForTimeout(3000);
+    }
 
     await page.evaluate(() => {
       const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
