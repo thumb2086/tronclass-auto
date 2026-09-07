@@ -60,6 +60,12 @@ async function watchYouTube(page, stats) {
   let rate = 1;
 
   try {
+    await page.evaluate(() => {
+      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+      if (f) f.scrollIntoView({ block: 'center' });
+    });
+    await page.waitForTimeout(2000);
+
     const ytFrame = page.locator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
     await ytFrame.click({ timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(5000);
@@ -76,16 +82,45 @@ async function watchYouTube(page, stats) {
       if (!f) return;
       f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
     });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
+
+    rate = await page.evaluate(() => {
+      return new Promise((resolve) => {
+        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+        if (!f) { resolve(1); return; }
+
+        let resolved = false;
+        const handler = (e) => {
+          try {
+            const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+            if (d.event === 'infoDelivery' && d.info && !resolved) {
+              resolved = true;
+              window.removeEventListener('message', handler);
+              resolve(d.info.playbackRate || 1);
+            }
+          } catch(e) {}
+        };
+        window.addEventListener('message', handler);
+
+        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
+        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setPlaybackRate', args: [2] }), '*');
+        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getPlaybackRate', args: [] }), '*');
+
+        setTimeout(() => { if (!resolved) { resolved = true; window.removeEventListener('message', handler); resolve(1); } }, 5000);
+      });
+    });
+    log(chalk.blue(`  Speed: ${rate}x`));
 
     const isPlaying = await page.evaluate(() => {
       return new Promise((resolve) => {
         const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
         if (!f) { resolve(false); return; }
+        let resolved = false;
         const handler = (e) => {
           try {
             const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-            if (d.event === 'infoDelivery' && d.info) {
+            if (d.event === 'infoDelivery' && d.info && !resolved) {
+              resolved = true;
               window.removeEventListener('message', handler);
               resolve(d.info.currentTime > 0);
             }
@@ -93,67 +128,52 @@ async function watchYouTube(page, stats) {
         };
         window.addEventListener('message', handler);
         f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getCurrentTime', args: [] }), '*');
-        setTimeout(() => { window.removeEventListener('message', handler); resolve(false); }, 5000);
+        setTimeout(() => { if (!resolved) { resolved = true; window.removeEventListener('message', handler); resolve(false); } }, 5000);
       });
     });
 
-    if (!isPlaying) {
-      log(chalk.yellow('  Player not responding, retrying click...'));
-      try {
-        const frame = page.frameLocator('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-        await frame.locator('.ytp-large-play-button, .ytp-play-button').first().click({ timeout: 5000 }).catch(() => {});
-      } catch(e) {}
-      await page.waitForTimeout(3000);
-
+    if (isPlaying) {
+      log(chalk.green('  Playing ✓'));
+    } else {
+      log(chalk.yellow('  Not playing, retrying...'));
       await page.evaluate(() => {
         const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
         if (!f) return;
         f.contentWindow.postMessage('{"event":"listening"}', '*');
       });
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(3000);
       await page.evaluate(() => {
         const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
         if (!f) return;
         f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
       });
-      await page.waitForTimeout(3000);
-    }
+      await page.waitForTimeout(5000);
 
-    await page.evaluate(() => {
-      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-      if (!f) return;
-      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
-    });
-    await page.waitForTimeout(1000);
-
-    await page.evaluate(() => {
-      const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-      if (!f) return;
-      f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setPlaybackRate', args: [2] }), '*');
-    });
-    await page.waitForTimeout(2000);
-
-    rate = await page.evaluate(() => {
-      return new Promise((resolve) => {
-        const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
-        if (!f) { resolve(1); return; }
-        const handler = (e) => {
-          try {
-            const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-            if (d.event === 'infoDelivery' && d.info && d.info.playbackRate) {
-              window.removeEventListener('message', handler);
-              resolve(d.info.playbackRate);
-            }
-          } catch(e) {}
-        };
-        window.addEventListener('message', handler);
-        f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getPlaybackRate', args: [] }), '*');
-        setTimeout(() => { window.removeEventListener('message', handler); resolve(1); }, 3000);
+      const retry = await page.evaluate(() => {
+        return new Promise((resolve) => {
+          const f = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"]');
+          if (!f) { resolve(false); return; }
+          let resolved = false;
+          const handler = (e) => {
+            try {
+              const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+              if (d.event === 'infoDelivery' && d.info && !resolved) {
+                resolved = true;
+                window.removeEventListener('message', handler);
+                resolve(d.info.currentTime > 0);
+              }
+            } catch(e) {}
+          };
+          window.addEventListener('message', handler);
+          f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getCurrentTime', args: [] }), '*');
+          setTimeout(() => { if (!resolved) { resolved = true; window.removeEventListener('message', handler); resolve(false); } }, 5000);
+        });
       });
-    });
-    log(chalk.blue(`  Speed: ${rate}x`));
+      if (retry) log(chalk.green('  Playing ✓'));
+      else log(chalk.yellow('  Could not verify playback'));
+    }
   } catch (e) {
-    log(chalk.yellow(`  YouTube setup error: ${e.message}`));
+    log(chalk.yellow(`  YouTube error: ${e.message}`));
   }
 
   await page.waitForTimeout(2000);

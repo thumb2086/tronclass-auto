@@ -81,15 +81,14 @@ async function processCourse(page, courseId, stats) {
   let skip = 0;
   let fail = 0;
   let totalProcessed = 0;
-  let serverRejects = {};
-  let consecutiveLocked = 0;
+  let triedIds = new Set();
 
   console.log(chalk.cyan(`  [fetching course activities...]`));
 
   while (true) {
     const uncompleted = await getUncompleted(page, courseId);
     const videos = uncompleted.filter(u => u.type === 'online_video');
-    const remaining = videos.filter(v => !isDone(courseId, v.id));
+    const remaining = videos.filter(v => !isDone(courseId, v.id) && !triedIds.has(v.id));
 
     if (remaining.length === 0) break;
 
@@ -115,8 +114,9 @@ async function processCourse(page, courseId, stats) {
 
     if (!page.url().includes('learning-activity')) {
       console.log(chalk.yellow('  Page redirect, skipping'));
-      markLocked(courseId, act.id);
-      break;
+      triedIds.add(act.id);
+      totalProcessed++;
+      continue;
     }
 
     const playerType = await page.evaluate(() => {
@@ -128,25 +128,22 @@ async function processCourse(page, courseId, stats) {
       }
       return 'none';
     });
+
     if (playerType === 'none') {
-      console.log(chalk.yellow('  No video, waiting more...'));
+      console.log(chalk.yellow('  No player, waiting more...'));
       await page.waitForTimeout(10000);
       const hasVideoNow = await page.evaluate(() => {
-        if (document.querySelector('video')) return true;
+        if (document.querySelector('video')) return 'html5';
         const yt = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"], iframe[src*="vimeo"]');
-        if (yt) return true;
-        for (const f of document.querySelectorAll('iframe')) {
-          try { if (f.contentDocument && f.contentDocument.querySelector('video')) return true; } catch (e) {}
-        }
-        return false;
+        if (yt) return 'iframe';
+        return 'none';
       });
-      if (!hasVideoNow) {
-        console.log(chalk.yellow('  Still no video, skipping (not a video activity)'));
-        markLocked(courseId, act.id);
-        break;
+      if (hasVideoNow === 'none') {
+        console.log(chalk.yellow('  No player found, skipping'));
+        triedIds.add(act.id);
+        totalProcessed++;
+        continue;
       }
-    } else {
-      consecutiveLocked = 0;
     }
 
     try {
@@ -158,11 +155,11 @@ async function processCourse(page, courseId, stats) {
       }
       const success = await watchVideo(page, stats);
       if (success) {
-        await page.waitForTimeout(5000);
+        await page.waitForTimeout(10000);
         await page.goto(`${BASE_URL}/course/${courseId}/content#/`, {
           waitUntil: 'domcontentloaded', timeout: 15000
         }).catch(() => {});
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(5000);
 
         const serverComplete = await page.evaluate((actId) => {
           const el = document.querySelector('.learning-activities');
@@ -185,21 +182,17 @@ async function processCourse(page, courseId, stats) {
           done++;
           console.log(chalk.green('  ✓ Saved (server confirmed)'));
         } else {
-          serverRejects[act.id] = (serverRejects[act.id] || 0) + 1;
-          if (serverRejects[act.id] >= 2) {
-            console.log(chalk.yellow('  Server rejected twice, marking done locally'));
-            markDone(courseId, act.id);
-            done++;
-          } else {
-            console.log(chalk.yellow('  Server not confirmed, will retry...'));
-            fail++;
-          }
+          console.log(chalk.yellow('  Server not confirmed, skipping'));
+          triedIds.add(act.id);
+          fail++;
         }
       } else {
+        triedIds.add(act.id);
         fail++;
       }
     } catch (e) {
       console.log(chalk.red(`  [ERROR] ${e.message}`));
+      triedIds.add(act.id);
       fail++;
     }
 
