@@ -21,27 +21,22 @@ function log(msg) {
 }
 
 async function detectPlayerType(page) {
-  return page.evaluate(() => {
+  const type = await page.evaluate(() => {
     const v = document.querySelector('video');
     if (v) return 'html5';
-
     const yt = document.querySelector('iframe[src*="youtube"], iframe[src*="youtu.be"], iframe[src*="vimeo"]');
     if (yt) return 'youtube';
-
     for (const f of document.querySelectorAll('iframe')) {
-      try {
-        if (f.contentDocument && f.contentDocument.querySelector('video')) return 'html5';
-      } catch (e) {}
+      try { if (f.contentDocument && f.contentDocument.querySelector('video')) return 'html5'; } catch (e) {}
     }
     return 'none';
-  }).then(async (type) => {
-    if (type === 'none') {
-      for (const f of page.frames) {
-        if (f.url && (f.url.includes('youtube') || f.url.includes('youtu.be'))) return 'youtube';
-      }
-    }
-    return type;
   });
+  if (type !== 'none') return type;
+  try {
+    const ytFrame = page.frame({ url: /youtube|youtu\.be/ });
+    if (ytFrame) return 'youtube';
+  } catch (e) {}
+  return 'none';
 }
 
 async function watchVideo(page, stats) {
@@ -64,13 +59,7 @@ async function watchYouTube(page, stats) {
   let rate = 1;
 
   try {
-    let ytFrame = null;
-    for (const f of page.frames) {
-      if (f.url && (f.url.includes('youtube') || f.url.includes('youtu.be'))) {
-        ytFrame = f;
-        break;
-      }
-    }
+    const ytFrame = page.frame({ url: /youtube|youtu\.be/ });
 
     if (!ytFrame) {
       log(chalk.yellow('  YouTube frame not found'));
@@ -102,7 +91,7 @@ async function watchYouTube(page, stats) {
     if (state2 === 1) {
       log(chalk.green('  Playing ✓'));
     } else {
-      log(chalk.yellow(`  State: ${state2} (may still be loading)`));
+      log(chalk.yellow(`  State: ${state2}`));
     }
   } catch (e) {
     log(chalk.yellow(`  YouTube error: ${e.message}`));
