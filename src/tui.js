@@ -165,11 +165,12 @@ async function mainMenu() {
       '__sep__',
       { name: chalk.gray('🚪 離開'), value: 'exit' }
     ], [
-      chalk.cyan('╔' + '═'.repeat(50) + '╗'),
-      chalk.cyan('║') + chalk.bold.white(`  tronclass-auto  v${pkg.version}`.padEnd(50)) + chalk.cyan('║'),
-      chalk.cyan('║') + chalk.gray('  自動觀看 eclass/TronClass 影片'.padEnd(50)) + chalk.cyan('║'),
-      chalk.cyan('║') + `  課程: ${chalk.cyan(config.courses.length)} 個  |  Cookie: ${chalk.green('✓')}  |  倍速: ${chalk.yellow(config.playbackRate || 2)}x`.padEnd(50) + chalk.cyan('║'),
-      chalk.cyan('╚' + '═'.repeat(50) + '╝'),
+      '',
+      chalk.white('╔' + '═'.repeat(50) + '╗'),
+      chalk.white('║') + chalk.bold.white(`  tronclass-auto  v${pkg.version}`.padEnd(50)) + chalk.white('║'),
+      chalk.white('║') + chalk.gray('  自動觀看 eclass/TronClass 影片'.padEnd(50)) + chalk.white('║'),
+      chalk.white('║') + `  課程: ${chalk.cyan(config.courses.length)} 個  |  Cookie: ${chalk.green('✓')}  |  倍速: ${chalk.yellow(config.playbackRate || 2)}x`.padEnd(50) + chalk.white('║'),
+      chalk.white('╚' + '═'.repeat(50) + '╝'),
     ]);
 
     if (action === '__esc__') { running = false; continue; }
@@ -279,16 +280,17 @@ async function courseMenu() {
     choices.push({ name: chalk.gray('⬅ 返回'), value: 'back' });
 
     const action = await promptList(`課程管理 (${courses.length} 個):`, choices, [
-      chalk.cyan('╔' + '═'.repeat(50) + '╗'),
-      chalk.cyan('║') + chalk.bold.white('  📋 課程列表'.padEnd(50)) + chalk.cyan('║'),
-      chalk.cyan('╠' + '═'.repeat(50) + '╣'),
+      '',
+      chalk.white('┌' + '─'.repeat(50) + '┐'),
+      chalk.white('│') + chalk.bold.white('  📋 課程列表'.padEnd(50)) + chalk.white('│'),
+      chalk.white('├' + '─'.repeat(50) + '┤'),
       ...courses.map((url, i) => {
         const match = url.match(/\/course\/(\d+)\//);
         const id = match ? match[1] : '?';
         const name = courseNames[id] || id;
-        return chalk.cyan('║') + `  ${chalk.white(i + 1 + '.')} ${chalk.cyan(name)} [${id}]`.padEnd(51) + chalk.cyan('║');
+        return chalk.white('│') + `  ${chalk.white(i + 1 + '.')} ${chalk.cyan(name)} [${id}]`.padEnd(51) + chalk.white('│');
       }),
-      chalk.cyan('╚' + '═'.repeat(50) + '╝'),
+      chalk.white('└' + '─'.repeat(50) + '┘'),
     ]);
 
     if (action === '__esc__' || action === 'back') {
@@ -330,9 +332,10 @@ async function settingsMenu() {
     '__sep__',
     { name: chalk.gray('⬅ 返回'), value: 'back' }
   ], [
-    chalk.cyan('╔' + '═'.repeat(50) + '╗'),
-    chalk.cyan('║') + chalk.bold.white('  ⚙  設定'.padEnd(50)) + chalk.cyan('║'),
-    chalk.cyan('╚' + '═'.repeat(50) + '╝'),
+    '',
+    chalk.white('╔' + '═'.repeat(50) + '╗'),
+    chalk.white('║') + chalk.bold.white('  ⚙  設定'.padEnd(50)) + chalk.white('║'),
+    chalk.white('╚' + '═'.repeat(50) + '╝'),
   ]);
 
   if (setting === '__esc__' || setting === 'back') return;
