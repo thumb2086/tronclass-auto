@@ -28,6 +28,8 @@ async function getUncompleted(page, courseId) {
       try { completeness = scope.getActivityCompleteness(a); } catch (e) {}
       if (completeness === 'full') return;
 
+      if (a.completion_criterion_value === '' || a.completion_criterion_value === undefined || a.completion_criterion_value === null) return;
+
       let isUpcoming = false;
       let isExpired = false;
       try { isUpcoming = scope.activityUpcoming(a); } catch (e) {}

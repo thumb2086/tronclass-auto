@@ -119,17 +119,30 @@ async function watchYouTube(page, stats) {
 
   await page.waitForTimeout(2000);
 
-  const ytDuration = await page.evaluate(() => {
-    const actText = document.querySelector('.activity-attribute, [class*="attribute"]');
-    if (actText) {
-      const m = actText.textContent.match(/(\d{2}):(\d{2}):(\d{2})/);
-      if (m) return parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]);
-    }
-    return 180;
-  });
+  let ytDuration = 0;
+  for (let i = 0; i < 10; i++) {
+    try {
+      const freshFrame = page.frame({ url: /youtube|youtu\.be/ });
+      if (freshFrame) {
+        ytDuration = await freshFrame.evaluate(() => document.querySelector('#movie_player').getDuration());
+        if (ytDuration > 0) break;
+      }
+    } catch (e) {}
+    await page.waitForTimeout(2000);
+  }
+  if (!ytDuration || ytDuration <= 0) {
+    ytDuration = await page.evaluate(() => {
+      const actText = document.querySelector('.activity-attribute, [class*="attribute"]');
+      if (actText) {
+        const m = actText.textContent.match(/(\d{2}):(\d{2}):(\d{2})/);
+        if (m) return parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]);
+      }
+      return 180;
+    });
+  }
 
   const waitTime = (rate >= 2 ? Math.ceil(ytDuration / 2) : ytDuration) + 30;
-  log(chalk.blue(`  ~${formatTime(ytDuration)} video → ~${formatTime(waitTime)} (${rate}x)`));
+  log(chalk.blue(`  ${formatTime(ytDuration)} video → ~${formatTime(waitTime)} (${rate}x)`));
 
   if (stats) {
     stats.currentVideoDuration = ytDuration;
