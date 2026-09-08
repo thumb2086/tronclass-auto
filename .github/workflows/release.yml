@@ -61,7 +61,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: gui/dist/*
+          path: |
+            gui/dist/*.exe
+            gui/dist/*.dmg
+            gui/dist/*.AppImage
+            gui/dist/*.yml
           if-no-files-found: warn
 
   release:
