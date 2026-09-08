@@ -268,22 +268,33 @@ async function showStatus() {
   const { chromium } = re('playwright');
   const { ensureBrowser } = re('./browser');
   const exePath = await ensureBrowser();
-  const launchOpts = { headless: true, slowMo: 50, args: ['--disable-gpu', '--disable-software-rasterizer'] };
+  const launchOpts = {
+    headless: true,
+    slowMo: 50,
+    args: [
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+      '--disable-dev-shm-usage',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-cache',
+      '--disable-application-cache'
+    ]
+  };
   if (exePath) launchOpts.executablePath = exePath;
   const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext();
   await context.addCookies(cookies);
 
-  const checkPage = await context.newPage();
-  await checkPage.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await checkPage.waitForTimeout(2000);
+  const page = await context.newPage();
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.waitForTimeout(2000);
 
-  if (checkPage.url().includes('login')) {
+  if (page.url().includes('login')) {
     console.log(chalk.red('[ERROR] Cookie 過期'));
     await browser.close();
     return;
   }
-  await checkPage.close();
 
   const courses = config.courses || [];
   console.log(chalk.cyan('\n┌' + '─'.repeat(48) + '┐'));
@@ -294,18 +305,18 @@ async function showStatus() {
   let totalRemaining = 0;
   let totalExams = 0;
 
-  const courseResults = await Promise.all(courses.map(async (courseUrl) => {
+  const courseResults = [];
+  for (const courseUrl of courses) {
     const match = courseUrl.match(/\/course\/(\d+)\//);
     const courseId = match ? match[1] : '?';
     try {
-      const pg = await context.newPage();
-      const allVideos = await getAllVideos(pg, courseId);
-      await pg.close();
-      return { courseId, allVideos };
+      const allVideos = await getAllVideos(page, courseId);
+      courseResults.push({ courseId, allVideos });
     } catch (e) {
-      return { courseId, allVideos: [] };
+      courseResults.push({ courseId, allVideos: [] });
     }
-  }));
+  }
+  await page.close();
 
   for (const { courseId, allVideos } of courseResults) {
     try {

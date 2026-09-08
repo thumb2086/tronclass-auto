@@ -232,14 +232,18 @@ async function courseMenu() {
         const { chromium } = require('playwright');
         const cookies = loadCookies();
         if (cookies.length > 0) {
-          const browser = await chromium.launch({ headless: true, slowMo: 50 });
+          const browser = await chromium.launch({
+            headless: true,
+            slowMo: 50,
+            args: ['--disable-gpu', '--disable-software-rasterizer', '--no-sandbox', '--disable-cache']
+          });
           const ctx = await browser.newContext();
           await ctx.addCookies(cookies);
+          const pg = await ctx.newPage();
 
-          const results = await Promise.all(courses.map(async (url) => {
+          for (const url of courses) {
             const match = url.match(/\/course\/(\d+)\//);
-            if (!match) return { id: '?', name: '' };
-            const pg = await ctx.newPage();
+            if (!match) continue;
             try {
               await pg.goto(`${BASE_URL}/course/${match[1]}/content#/`, { waitUntil: 'domcontentloaded', timeout: 8000 });
               await pg.waitForTimeout(2000);
@@ -249,15 +253,10 @@ async function courseMenu() {
                 const scope = angular.element(el).scope();
                 return (scope && scope.course) ? (scope.course.name || '') : '';
               });
-              return { id: match[1], name: name.substring(0, 30) };
-            } catch (e) {
-              return { id: match[1], name: '' };
-            } finally {
-              await pg.close();
-            }
-          }));
-
-          results.forEach(r => { if (r.name) courseNames[r.id] = r.name; });
+              if (name) courseNames[match[1]] = name.substring(0, 30);
+            } catch (e) {}
+          }
+          await pg.close();
           await browser.close();
         }
       } catch (e) {}
