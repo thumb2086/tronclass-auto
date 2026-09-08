@@ -273,16 +273,17 @@ async function showStatus() {
   const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext();
   await context.addCookies(cookies);
-  const page = await context.newPage();
 
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.waitForTimeout(2000);
+  const checkPage = await context.newPage();
+  await checkPage.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await checkPage.waitForTimeout(2000);
 
-  if (page.url().includes('login')) {
+  if (checkPage.url().includes('login')) {
     console.log(chalk.red('[ERROR] Cookie 過期'));
     await browser.close();
     return;
   }
+  await checkPage.close();
 
   const courses = config.courses || [];
   console.log(chalk.cyan('\n┌' + '─'.repeat(48) + '┐'));
@@ -293,11 +294,21 @@ async function showStatus() {
   let totalRemaining = 0;
   let totalExams = 0;
 
-  for (const courseUrl of courses) {
+  const courseResults = await Promise.all(courses.map(async (courseUrl) => {
     const match = courseUrl.match(/\/course\/(\d+)\//);
     const courseId = match ? match[1] : '?';
     try {
-      const allVideos = await getAllVideos(page, courseId);
+      const pg = await context.newPage();
+      const allVideos = await getAllVideos(pg, courseId);
+      await pg.close();
+      return { courseId, allVideos };
+    } catch (e) {
+      return { courseId, allVideos: [] };
+    }
+  }));
+
+  for (const { courseId, allVideos } of courseResults) {
+    try {
       const videos = allVideos.filter(u => u.type === 'online_video');
       const completed = videos.filter(v => v.completeness === 'full').length;
       const future = videos.filter(v => v.isFuture && v.completeness !== 'full').length;
