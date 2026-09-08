@@ -1,0 +1,35 @@
+name: Build Electron App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install GUI dependencies
+        run: npm install
+        working-directory: gui
+
+      - name: Build Windows exe
+        run: npm run build
+        working-directory: gui
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tronclass-auto-win64
+          path: gui/dist/*.exe
+          if-no-files-found: error

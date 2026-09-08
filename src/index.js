@@ -213,6 +213,50 @@ async function processCourse(page, courseId, stats) {
   return { done, skip, fail };
 }
 
+async function getAllVideos(page, courseId) {
+  try {
+    await page.goto(`${BASE_URL}/course/${courseId}/content#/`, {
+      waitUntil: 'domcontentloaded', timeout: 20000
+    });
+  } catch (e) {}
+  await page.waitForTimeout(8000);
+
+  return page.evaluate(() => {
+    const el = document.querySelector('.learning-activities');
+    if (!el) return [];
+    const scope = angular.element(el).scope();
+    if (!scope) return [];
+    const activities = document.querySelectorAll('.learning-activity.sortable');
+    let result = [];
+    activities.forEach((actEl) => {
+      const actScope = angular.element(actEl).scope();
+      if (!actScope || !actScope.activity) return;
+      const a = actScope.activity;
+      let completeness = '';
+      try { completeness = scope.getActivityCompleteness(a); } catch(e) {}
+      let isUpcoming = false;
+      try { isUpcoming = scope.activityUpcoming(a); } catch(e) {}
+      let startTime = '';
+      try {
+        const txt = actEl.textContent || '';
+        const tm = txt.match(/(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}/);
+        if (tm) startTime = tm[1];
+      } catch(e) {}
+      const now = new Date();
+      const startDate = startTime ? new Date(startTime) : null;
+      const isFuture = startDate && startDate > now;
+      result.push({
+        id: a.id,
+        type: a.type || '',
+        completeness: completeness,
+        isUpcoming: isUpcoming,
+        isFuture: isFuture
+      });
+    });
+    return result;
+  });
+}
+
 async function showStatus() {
   const config = loadConfig();
   const cookies = loadCookies();
@@ -253,23 +297,27 @@ async function showStatus() {
     const match = courseUrl.match(/\/course\/(\d+)\//);
     const courseId = match ? match[1] : '?';
     try {
-      const uncompleted = await getUncompleted(page, courseId);
-      const videos = uncompleted.filter(u => u.type === 'online_video');
-      const remaining = videos.filter(v => !isDone(courseId, v.id));
-      const exams = uncompleted.filter(u => u.type === 'exam').length;
+      const allVideos = await getAllVideos(page, courseId);
+      const videos = allVideos.filter(u => u.type === 'online_video');
+      const completed = videos.filter(v => v.completeness === 'full').length;
+      const future = videos.filter(v => v.isFuture && v.completeness !== 'full').length;
+      const remaining = videos.filter(v => v.completeness !== 'full' && !v.isFuture).length;
+      const exams = allVideos.filter(u => u.type === 'exam' && u.completeness !== 'full').length;
       totalVideos += videos.length;
-      totalRemaining += remaining.length;
+      totalRemaining += remaining;
       totalExams += exams;
 
-      const pct = videos.length > 0 ? Math.floor(((videos.length - remaining.length) / videos.length) * 100) : 100;
+      const pct = videos.length > 0 ? Math.floor((completed / videos.length) * 100) : 100;
       const filled = Math.floor(50 * pct / 100);
       const empty = 50 - filled;
       const bar = pct === 100
         ? chalk.green('█'.repeat(50))
         : chalk.green('█'.repeat(filled)) + chalk.gray('░'.repeat(empty));
 
-      const doneCount = videos.length - remaining.length;
-      console.log(chalk.cyan('│') + `  [${courseId}] ${doneCount}/${videos.length} videos  ${exams} exams`.padEnd(50) + chalk.cyan('│'));
+      const doneCount = completed;
+      const pending = remaining;
+      const info = future > 0 ? ` (${future} 未開放)` : '';
+      console.log(chalk.cyan('│') + `  [${courseId}] ${doneCount}/${videos.length} videos  ${exams} exams${info}`.padEnd(50) + chalk.cyan('│'));
       console.log(chalk.cyan('│') + `    ${bar} ${pct}%`.padEnd(52) + chalk.cyan('│'));
     } catch (e) {
       console.log(chalk.cyan('│') + `  [${courseId}] ERROR`.padEnd(50) + chalk.cyan('│'));

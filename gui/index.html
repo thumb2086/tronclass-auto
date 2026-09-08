@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>TronClass Auto</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; display: flex; flex-direction: column; height: 100vh; }
+    header { background: #16213e; padding: 16px 24px; border-bottom: 1px solid #0f3460; display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 18px; color: #e94560; }
+    header span { font-size: 12px; color: #888; }
+    .main { flex: 1; display: flex; overflow: hidden; }
+    .sidebar { width: 220px; background: #16213e; border-right: 1px solid #0f3460; padding: 12px 0; }
+    .sidebar button { display: block; width: 100%; text-align: left; padding: 10px 20px; background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px; }
+    .sidebar button:hover { background: #0f3460; color: #fff; }
+    .sidebar button.active { background: #e94560; color: #fff; }
+    .content { flex: 1; padding: 20px; overflow-y: auto; }
+    #output { font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; line-height: 1.6; color: #a0a0a0; }
+    .actions { padding: 16px 24px; background: #16213e; border-top: 1px solid #0f3460; display: flex; gap: 8px; }
+    .actions button { padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #e94560; color: #fff; }
+    .btn-primary:hover { background: #c73650; }
+    .btn-secondary { background: #0f3460; color: #ccc; }
+    .btn-secondary:hover { background: #1a4a7a; color: #fff; }
+    .status { padding: 8px 24px; background: #0f3460; font-size: 12px; color: #888; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TronClass Auto</h1>
+    <span>v1.6.0 Electron GUI</span>
+  </header>
+  <div class="main">
+    <div class="sidebar">
+      <button class="active" onclick="showSection('status')">進度統計</button>
+      <button onclick="showSection('config')">設定</button>
+      <button onclick="showSection('about')">關於</button>
+    </div>
+    <div class="content">
+      <div id="section-status">
+        <h2 style="margin-bottom:12px;">課程進度統計</h2>
+        <p style="color:#888;margin-bottom:16px;">點擊「查看統計」載入各課程進度。</p>
+      </div>
+      <div id="section-config" style="display:none;">
+        <h2 style="margin-bottom:12px;">設定</h2>
+        <p style="color:#888;">使用 CLI 工具設定倍速、無頭模式等選項。</p>
+      </div>
+      <div id="section-about" style="display:none;">
+        <h2 style="margin-bottom:12px;">關於</h2>
+        <p style="color:#888;">TronClass Auto - 自動觀看 eclass/TronClass 影片</p>
+      </div>
+      <div id="output"></div>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn-primary" onclick="runStatus()">查看統計</button>
+    <button class="btn-primary" onclick="runMenu()">互動選單</button>
+    <button class="btn-secondary" onclick="clearOutput()">清除</button>
+  </div>
+  <div class="status" id="statusBar">就緒</div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    function showSection(name) {
+      document.querySelectorAll('.content > div[id]').forEach(d => d.style.display = 'none');
+      document.getElementById('section-' + name).style.display = 'block';
+      document.querySelectorAll('.sidebar button').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+    }
+
+    function clearOutput() {
+      document.getElementById('output').textContent = '';
+    }
+
+    function appendOutput(text) {
+      const el = document.getElementById('output');
+      el.textContent += text;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    async function runStatus() {
+      document.getElementById('statusBar').textContent = '執行中...';
+      appendOutput('=== 載入進度統計 ===\n');
+      const result = await ipcRenderer.invoke('run-command', ['status']);
+      if (result.stdout) appendOutput(result.stdout);
+      if (result.stderr) appendOutput(result.stderr);
+      appendOutput(`\nexit code: ${result.code}\n`);
+      document.getElementById('statusBar').textContent = '就緒';
+    }
+
+    async function runMenu() {
+      document.getElementById('statusBar').textContent = '執行中...';
+      appendOutput('=== 啟動互動選單 ===\n');
+      appendOutput('提示：互動選單需要在終端機中使用 tronclass menu\n');
+      document.getElementById('statusBar').textContent = '就緒';
+    }
+  </script>
+</body>
+</html>

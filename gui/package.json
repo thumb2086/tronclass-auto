@@ -1,0 +1,30 @@
+{
+  "name": "tronclass-auto-gui",
+  "version": "1.0.0",
+  "description": "Electron wrapper for tronclass-auto",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64",
+    "build:portable": "electron-builder --win portable"
+  },
+  "dependencies": {
+    "tronclass-auto": "file:.."
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.tronclass.auto",
+    "productName": "TronClass Auto",
+    "win": {
+      "target": "nsis",
+      "icon": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
