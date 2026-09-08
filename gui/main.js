@@ -85,11 +85,14 @@ ipcMain.handle('get-status', async () => {
   const cookies = loadCookies();
   if (!cookies.length) return { error: '沒有 Cookie' };
 
+  const nodeVer = parseInt(process.version.replace('v', ''));
+  if (nodeVer < 20) return { error: `需要 Node.js 20+，目前 ${process.version}` };
+
   const { chromium } = require(path.join(srcDir, 'node_modules', 'playwright'));
   const { ensureBrowser } = require(path.join(srcDir, 'src', 'browser'));
   const exePath = await ensureBrowser();
   const opts = {
-    headless: true,
+    headless: config.headless !== false,
     args: ['--disable-gpu', '--no-sandbox', '--disable-cache', '--disable-dev-shm-usage']
   };
   if (exePath) opts.executablePath = exePath;
@@ -112,12 +115,23 @@ ipcMain.handle('get-status', async () => {
   }
 
   const { getAllVideos } = require(path.join(srcDir, 'src', 'index'));
+  const BASE_URL = 'https://eclass.yuntech.edu.tw';
   const results = [];
   const courses = config.courses || [];
 
   for (const courseUrl of courses) {
     const match = courseUrl.match(/\/course\/(\d+)\//);
     const courseId = match ? match[1] : '?';
+    let courseName = '';
+    try {
+      await page.goto(`${BASE_URL}/course/${courseId}/content#/`, { waitUntil: 'domcontentloaded', timeout: 10000 });
+      await page.waitForTimeout(2000);
+      courseName = await page.evaluate(() => {
+        const el = document.querySelector('.learning-activities');
+        if (!el) return '';
+        try { const s = angular.element(el).scope(); return (s && s.course) ? (s.course.name || '') : ''; } catch { return ''; }
+      });
+    } catch (e) {}
     try {
       const allVideos = await getAllVideos(page, courseId);
       const videos = allVideos.filter(u => u.type === 'online_video');
@@ -126,9 +140,9 @@ ipcMain.handle('get-status', async () => {
       const remaining = videos.filter(v => v.completeness !== 'full' && !v.isFuture).length;
       const exams = allVideos.filter(u => u.type === 'exam').length;
       const pct = videos.length > 0 ? Math.round((completed / videos.length) * 100) : 0;
-      results.push({ courseId, total: videos.length, completed, remaining, future, exams, pct });
+      results.push({ courseId, courseName: courseName.substring(0, 30), total: videos.length, completed, remaining, future, exams, pct });
     } catch (e) {
-      results.push({ courseId, total: 0, completed: 0, remaining: 0, future: 0, exams: 0, pct: 0 });
+      results.push({ courseId, courseName: courseName.substring(0, 30), total: 0, completed: 0, remaining: 0, future: 0, exams: 0, pct: 0 });
     }
   }
 

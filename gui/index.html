@@ -165,8 +165,9 @@
           ${courses.map(c => {
             const color = c.pct === 100 ? 'var(--green)' : c.pct > 50 ? 'var(--blue)' : c.pct > 0 ? 'var(--yellow)' : 'var(--accent)';
             const tag = c.pct === 100 ? '<span class="tag tag-green">完成</span>' : c.pct > 0 ? `<span class="tag tag-yellow">${c.pct}%</span>` : '<span class="tag tag-red">未開始</span>';
+            const name = c.courseName ? `<span style="color:var(--text2);font-size:12px;margin-left:8px">${c.courseName}</span>` : '';
             return `<div class="card">
-              <div class="card-header"><span>[${c.courseId}] ${tag}</span><span class="stat">考試 <b>${c.exams}</b></span></div>
+              <div class="card-header"><span>[${c.courseId}]${name} ${tag}</span><span class="stat">考試 <b>${c.exams}</b></span></div>
               <div class="progress-bar"><div class="progress-fill" style="width:${c.pct}%;background:${color}"></div></div>
               <div><span class="stat">已完成 <b>${c.completed}/${c.total}</b></span><span class="stat">剩餘 <b>${c.remaining}</b></span>${c.future > 0 ? `<span class="stat">未開放 <b>${c.future}</b></span>` : ''}</div>
             </div>`;
@@ -279,6 +280,14 @@
           </div>
         </div>
         <div class="card">
+          <div class="card-header">瀏覽器模式</div>
+          <div style="display:flex;gap:8px" id="headlessGroup">
+            <button class="btn ${configData.headless !== false ? 'btn-primary' : 'btn-ghost'}" data-hl="true">無頭（背景）</button>
+            <button class="btn ${configData.headless === false ? 'btn-primary' : 'btn-ghost'}" data-hl="false">有頭（可見）</button>
+          </div>
+          <p style="font-size:12px;color:var(--text2);margin-top:8px">無頭：瀏覽器在背景執行；有頭：可看到瀏覽器畫面</p>
+        </div>
+        <div class="card">
           <div class="card-header">SlowMo (ms)</div>
           <input class="input" id="slowMoInput" type="number" value="${configData.slowMo || 50}" style="width:120px" />
         </div>
@@ -295,6 +304,15 @@
           ipcRenderer.invoke('save-config', configData);
           render();
           toast(`倍速: ${btn.dataset.speed}x`);
+        });
+      });
+
+      document.querySelectorAll('[data-hl]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          configData.headless = btn.dataset.hl === 'true';
+          ipcRenderer.invoke('save-config', configData);
+          render();
+          toast(`瀏覽器: ${configData.headless ? '無頭' : '有頭'}`);
         });
       });
 
