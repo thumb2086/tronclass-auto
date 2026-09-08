@@ -4,97 +4,347 @@
   <meta charset="UTF-8">
   <title>TronClass Auto</title>
   <style>
+    :root {
+      --bg: #0f1117;
+      --bg2: #161921;
+      --bg3: #1e2130;
+      --border: #2a2d3a;
+      --text: #e4e6eb;
+      --text2: #9ca0ab;
+      --accent: #e94560;
+      --accent2: #ff6b81;
+      --green: #2ecc71;
+      --yellow: #f1c40f;
+      --blue: #3498db;
+      --radius: 8px;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; display: flex; flex-direction: column; height: 100vh; }
-    header { background: #16213e; padding: 16px 24px; border-bottom: 1px solid #0f3460; display: flex; align-items: center; gap: 12px; }
-    header h1 { font-size: 18px; color: #e94560; }
-    header span { font-size: 12px; color: #888; }
-    .main { flex: 1; display: flex; overflow: hidden; }
-    .sidebar { width: 220px; background: #16213e; border-right: 1px solid #0f3460; padding: 12px 0; }
-    .sidebar button { display: block; width: 100%; text-align: left; padding: 10px 20px; background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px; }
-    .sidebar button:hover { background: #0f3460; color: #fff; }
-    .sidebar button.active { background: #e94560; color: #fff; }
-    .content { flex: 1; padding: 20px; overflow-y: auto; }
-    #output { font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; line-height: 1.6; color: #a0a0a0; }
-    .actions { padding: 16px 24px; background: #16213e; border-top: 1px solid #0f3460; display: flex; gap: 8px; }
-    .actions button { padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-    .btn-primary { background: #e94560; color: #fff; }
-    .btn-primary:hover { background: #c73650; }
-    .btn-secondary { background: #0f3460; color: #ccc; }
-    .btn-secondary:hover { background: #1a4a7a; color: #fff; }
-    .status { padding: 8px 24px; background: #0f3460; font-size: 12px; color: #888; }
+    body { font-family: -apple-system, 'Segoe UI', 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; user-select: none; }
+
+    .titlebar { -webkit-app-region: drag; height: 32px; background: var(--bg); display: flex; align-items: center; padding: 0 12px; }
+    .titlebar span { font-size: 11px; color: var(--text2); margin-left: 8px; }
+
+    .app { flex: 1; display: flex; overflow: hidden; }
+
+    .nav { width: 200px; background: var(--bg2); border-right: 1px solid var(--border); padding: 8px 0; display: flex; flex-direction: column; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--text2); cursor: pointer; font-size: 13px; border-left: 3px solid transparent; transition: all .15s; }
+    .nav-item:hover { background: var(--bg3); color: var(--text); }
+    .nav-item.active { background: var(--bg3); color: var(--accent); border-left-color: var(--accent); }
+    .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+    .nav-spacer { flex: 1; }
+
+    .page { flex: 1; overflow-y: auto; padding: 24px; }
+    .page-header { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+    .page-sub { font-size: 13px; color: var(--text2); margin-bottom: 20px; }
+
+    .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+    .card-header { font-size: 14px; font-weight: 500; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+
+    .progress-bar { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin: 8px 0; }
+    .progress-fill { height: 100%; border-radius: 3px; transition: width .6s ease; }
+
+    .stat { display: inline-block; font-size: 12px; color: var(--text2); margin-right: 12px; }
+    .stat b { color: var(--text); }
+
+    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all .15s; font-weight: 500; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent2); }
+    .btn-danger { background: #c0392b; color: #fff; }
+    .btn-danger:hover { background: #e74c3c; }
+    .btn-ghost { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--text2); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .log-box { background: #0a0c10; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px; line-height: 1.6; color: var(--text2); max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+
+    .input { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-size: 13px; width: 100%; outline: none; }
+    .input:focus { border-color: var(--accent); }
+
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+    .tag-green { background: rgba(46,204,113,.15); color: var(--green); }
+    .tag-yellow { background: rgba(241,196,15,.15); color: var(--yellow); }
+    .tag-red { background: rgba(233,69,96,.15); color: var(--accent); }
+
+    .toast { position: fixed; bottom: 20px; right: 20px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 16px; font-size: 13px; opacity: 0; transform: translateY(10px); transition: all .3s; z-index: 999; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    .empty { text-align: center; padding: 40px; color: var(--text2); }
+    .empty .icon { font-size: 48px; margin-bottom: 12px; }
+
+    .toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
+    .toolbar .spacer { flex: 1; }
+
+    .course-list { list-style: none; }
+    .course-item { display: flex; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); gap: 10px; }
+    .course-item:last-child { border-bottom: none; }
+    .course-id { font-family: monospace; color: var(--accent); font-size: 12px; min-width: 70px; }
+    .course-name { flex: 1; font-size: 13px; }
+    .course-actions { display: flex; gap: 6px; }
+    .icon-btn { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 14px; padding: 4px; border-radius: 4px; }
+    .icon-btn:hover { background: var(--bg3); color: var(--text); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; margin-right: 6px; vertical-align: middle; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>TronClass Auto</h1>
-    <span>v1.6.0 Electron GUI</span>
-  </header>
-  <div class="main">
-    <div class="sidebar">
-      <button class="active" onclick="showSection('status')">進度統計</button>
-      <button onclick="showSection('config')">設定</button>
-      <button onclick="showSection('about')">關於</button>
-    </div>
-    <div class="content">
-      <div id="section-status">
-        <h2 style="margin-bottom:12px;">課程進度統計</h2>
-        <p style="color:#888;margin-bottom:16px;">點擊「查看統計」載入各課程進度。</p>
-      </div>
-      <div id="section-config" style="display:none;">
-        <h2 style="margin-bottom:12px;">設定</h2>
-        <p style="color:#888;">使用 CLI 工具設定倍速、無頭模式等選項。</p>
-      </div>
-      <div id="section-about" style="display:none;">
-        <h2 style="margin-bottom:12px;">關於</h2>
-        <p style="color:#888;">TronClass Auto - 自動觀看 eclass/TronClass 影片</p>
-      </div>
-      <div id="output"></div>
-    </div>
+  <div class="titlebar">
+    <span style="font-size:14px;font-weight:600;color:var(--accent);-webkit-app-region:drag;">TronClass Auto</span>
+    <span>v1.7.3</span>
   </div>
-  <div class="actions">
-    <button class="btn-primary" onclick="runStatus()">查看統計</button>
-    <button class="btn-primary" onclick="runMenu()">互動選單</button>
-    <button class="btn-secondary" onclick="clearOutput()">清除</button>
+  <div class="app">
+    <div class="nav">
+      <div class="nav-item active" data-page="dashboard"><span class="icon">📊</span> 儀表板</div>
+      <div class="nav-item" data-page="courses"><span class="icon">📚</span> 課程管理</div>
+      <div class="nav-item" data-page="settings"><span class="icon">⚙</span> 設定</div>
+      <div class="nav-item" data-page="log"><span class="icon">📝</span> 執行記錄</div>
+      <div class="nav-spacer"></div>
+      <div class="nav-item" data-page="about"><span class="icon">ℹ</span> 關於</div>
+    </div>
+    <div class="page" id="page"></div>
   </div>
-  <div class="status" id="statusBar">就緒</div>
+  <div class="toast" id="toast"></div>
 
   <script>
     const { ipcRenderer } = require('electron');
+    let currentPage = 'dashboard';
+    let configData = { courses: [], playbackRate: 2, headless: false, slowMo: 50 };
+    let statusData = null;
+    let watchRunning = false;
 
-    function showSection(name) {
-      document.querySelectorAll('.content > div[id]').forEach(d => d.style.display = 'none');
-      document.getElementById('section-' + name).style.display = 'block';
-      document.querySelectorAll('.sidebar button').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
+    function toast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
     }
 
-    function clearOutput() {
-      document.getElementById('output').textContent = '';
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        currentPage = item.dataset.page;
+        render();
+      });
+    });
+
+    async function init() {
+      configData = await ipcRenderer.invoke('get-config');
+      render();
     }
 
-    function appendOutput(text) {
-      const el = document.getElementById('output');
-      el.textContent += text;
-      el.scrollTop = el.scrollHeight;
+    function render() {
+      const page = document.getElementById('page');
+      switch (currentPage) {
+        case 'dashboard': renderDashboard(page); break;
+        case 'courses': renderCourses(page); break;
+        case 'settings': renderSettings(page); break;
+        case 'log': renderLog(page); break;
+        case 'about': renderAbout(page); break;
+      }
     }
 
-    async function runStatus() {
-      document.getElementById('statusBar').textContent = '執行中...';
-      appendOutput('=== 載入進度統計 ===\n');
-      const result = await ipcRenderer.invoke('run-command', ['status']);
-      if (result.stdout) appendOutput(result.stdout);
-      if (result.stderr) appendOutput(result.stderr);
-      appendOutput(`\nexit code: ${result.code}\n`);
-      document.getElementById('statusBar').textContent = '就緒';
+    function renderDashboard(el) {
+      const courses = statusData?.courses || [];
+      const totalV = courses.reduce((s, c) => s + c.total, 0);
+      const totalC = courses.reduce((s, c) => s + c.completed, 0);
+      const totalR = courses.reduce((s, c) => s + c.remaining, 0);
+      const totalE = courses.reduce((s, c) => s + c.exams, 0);
+
+      el.innerHTML = `
+        <div class="page-header">儀表板</div>
+        <div class="page-sub">課程進度總覽</div>
+        <div class="toolbar">
+          <button class="btn btn-primary" id="btnRefresh" ${watchRunning ? 'disabled' : ''}>${statusData ? '🔄 重新整理' : '📊 載入統計'}</button>
+          ${!watchRunning ? `<button class="btn btn-primary" id="btnStart" ${configData.courses.length === 0 ? 'disabled' : ''}>▶ 開始觀看</button>` : `<button class="btn btn-danger" id="btnStop">⏹ 停止</button>`}
+          <div class="spacer"></div>
+          ${statusData ? `<span class="stat">課程 <b>${courses.length}</b></span><span class="stat">影片 <b>${totalC}/${totalV}</b></span><span class="stat">剩餘 <b>${totalR}</b></span><span class="stat">考試 <b>${totalE}</b></span>` : ''}
+        </div>
+        <div id="dashboard-content">
+          ${courses.length === 0 && !statusData ? `<div class="empty"><div class="icon">📭</div>還沒有設定課程<br><br><button class="btn btn-ghost" onclick="document.querySelector('[data-page=courses]').click()">新增課程</button></div>` : ''}
+          ${courses.map(c => {
+            const color = c.pct === 100 ? 'var(--green)' : c.pct > 50 ? 'var(--blue)' : c.pct > 0 ? 'var(--yellow)' : 'var(--accent)';
+            const tag = c.pct === 100 ? '<span class="tag tag-green">完成</span>' : c.pct > 0 ? `<span class="tag tag-yellow">${c.pct}%</span>` : '<span class="tag tag-red">未開始</span>';
+            return `<div class="card">
+              <div class="card-header"><span>[${c.courseId}] ${tag}</span><span class="stat">考試 <b>${c.exams}</b></span></div>
+              <div class="progress-bar"><div class="progress-fill" style="width:${c.pct}%;background:${color}"></div></div>
+              <div><span class="stat">已完成 <b>${c.completed}/${c.total}</b></span><span class="stat">剩餘 <b>${c.remaining}</b></span>${c.future > 0 ? `<span class="stat">未開放 <b>${c.future}</b></span>` : ''}</div>
+            </div>`;
+          }).join('')}
+        </div>`;
+
+      document.getElementById('btnRefresh')?.addEventListener('click', loadStatus);
+      document.getElementById('btnStart')?.addEventListener('click', startWatch);
+      document.getElementById('btnStop')?.addEventListener('click', stopWatch);
     }
 
-    async function runMenu() {
-      document.getElementById('statusBar').textContent = '執行中...';
-      appendOutput('=== 啟動互動選單 ===\n');
-      appendOutput('提示：互動選單需要在終端機中使用 tronclass menu\n');
-      document.getElementById('statusBar').textContent = '就緒';
+    async function loadStatus() {
+      const btn = document.getElementById('btnRefresh');
+      if (btn) { btn.innerHTML = '<span class="spinner"></span>載入中...'; btn.disabled = true; }
+      statusData = await ipcRenderer.invoke('get-status');
+      if (statusData.error) { toast(statusData.error); statusData = null; }
+      render();
     }
+
+    async function startWatch() {
+      const ids = configData.courses.map(u => { const m = u.match(/\/course\/(\d+)\//); return m ? m[1] : null; }).filter(Boolean);
+      if (!ids.length) { toast('沒有課程'); return; }
+      watchRunning = true;
+      render();
+      const r = await ipcRenderer.invoke('run-watch', ids);
+      if (!r.ok) { toast(r.error); watchRunning = false; render(); }
+    }
+
+    async function stopWatch() {
+      await ipcRenderer.invoke('stop-watch');
+      watchRunning = false;
+      render();
+      toast('已停止');
+    }
+
+    ipcRenderer.on('watch-log', (e, msg) => {
+      if (currentPage === 'log') {
+        const box = document.getElementById('logBox');
+        if (box) { box.textContent += msg; box.scrollTop = box.scrollHeight; }
+      }
+    });
+
+    ipcRenderer.on('watch-done', (e, code) => {
+      watchRunning = false;
+      render();
+      toast(`完成 (exit ${code})`);
+    });
+
+    function renderCourses(el) {
+      const courses = configData.courses || [];
+      el.innerHTML = `
+        <div class="page-header">課程管理</div>
+        <div class="page-sub">新增或移除 eclass 課程</div>
+        <div class="toolbar">
+          <input class="input" id="courseInput" placeholder="輸入課程 ID 或 URL" style="width:300px" />
+          <button class="btn btn-primary" id="btnAdd">➕ 新增</button>
+          <div class="spacer"></div>
+          ${courses.length > 0 ? `<button class="btn btn-ghost" id="btnClear" style="color:var(--accent)">🗑 清空</button>` : ''}
+        </div>
+        ${courses.length === 0 ? `<div class="empty"><div class="icon">📭</div>還沒有課程</div>` : `<div class="card" style="padding:0;overflow:hidden"><ul class="course-list">${courses.map((url, i) => {
+          const m = url.match(/\/course\/(\d+)\//);
+          const id = m ? m[1] : '?';
+          return `<li class="course-item"><span class="course-id">${id}</span><span class="course-name">${url}</span><div class="course-actions"><button class="icon-btn" data-remove="${i}" title="移除">✕</button></div></li>`;
+        }).join('')}</ul></div>`}`;
+
+      document.getElementById('btnAdd')?.addEventListener('click', () => {
+        const input = document.getElementById('courseInput');
+        const val = input.value.trim();
+        if (!val) return;
+        let url = val;
+        if (/^\d+$/.test(val)) url = `https://eclass.yuntech.edu.tw/course/${val}/content#/`;
+        configData.courses = configData.courses || [];
+        configData.courses.push(url);
+        ipcRenderer.invoke('save-config', configData);
+        input.value = '';
+        toast('已新增');
+        render();
+      });
+
+      document.getElementById('courseInput')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('btnAdd').click();
+      });
+
+      document.querySelectorAll('[data-remove]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.remove);
+          configData.courses.splice(idx, 1);
+          ipcRenderer.invoke('save-config', configData);
+          toast('已移除');
+          render();
+        });
+      });
+
+      document.getElementById('btnClear')?.addEventListener('click', () => {
+        configData.courses = [];
+        ipcRenderer.invoke('save-config', configData);
+        toast('已清空');
+        render();
+      });
+    }
+
+    function renderSettings(el) {
+      el.innerHTML = `
+        <div class="page-header">設定</div>
+        <div class="page-sub">調整播放參數</div>
+        <div class="card">
+          <div class="card-header">播放倍速</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap" id="speedGroup">
+            ${[2, 1.5, 1.25, 1, 0.75].map(s => `<button class="btn ${configData.playbackRate === s ? 'btn-primary' : 'btn-ghost'}" data-speed="${s}">${s}x</button>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">SlowMo (ms)</div>
+          <input class="input" id="slowMoInput" type="number" value="${configData.slowMo || 50}" style="width:120px" />
+        </div>
+        <div class="card">
+          <div class="card-header">匯入 Cookie</div>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:10px">從 tronclass login 匯出的 JSON 檔</p>
+          <button class="btn btn-ghost" id="btnImportCookie">📂 選擇檔案</button>
+          <span id="cookieStatus" style="margin-left:10px;font-size:12px"></span>
+        </div>`;
+
+      document.querySelectorAll('[data-speed]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          configData.playbackRate = parseFloat(btn.dataset.speed);
+          ipcRenderer.invoke('save-config', configData);
+          render();
+          toast(`倍速: ${btn.dataset.speed}x`);
+        });
+      });
+
+      document.getElementById('slowMoInput')?.addEventListener('change', (e) => {
+        configData.slowMo = parseInt(e.target.value) || 50;
+        ipcRenderer.invoke('save-config', configData);
+      });
+
+      document.getElementById('btnImportCookie')?.addEventListener('click', async () => {
+        const r = await ipcRenderer.invoke('import-cookies');
+        const s = document.getElementById('cookieStatus');
+        if (r.ok) { s.textContent = '✓ 已匯入'; s.style.color = 'var(--green)'; toast('Cookie 已匯入'); }
+        else { s.textContent = '✕ ' + (r.error || '失敗'); s.style.color = 'var(--accent)'; }
+      });
+
+      ipcRenderer.invoke('get-cookies').then(r => {
+        const s = document.getElementById('cookieStatus');
+        if (s && r.hasCookies) { s.textContent = '✓ 已有 Cookie'; s.style.color = 'var(--green)'; }
+      });
+    }
+
+    function renderLog(el) {
+      el.innerHTML = `
+        <div class="page-header">執行記錄</div>
+        <div class="page-sub">觀看過程的即時輸出</div>
+        <div class="toolbar">
+          <button class="btn btn-ghost" id="btnClearLog">清除</button>
+        </div>
+        <div class="log-box" id="logBox">等待執行...</div>`;
+      document.getElementById('btnClearLog')?.addEventListener('click', () => {
+        const box = document.getElementById('logBox');
+        if (box) box.textContent = '';
+      });
+    }
+
+    function renderAbout(el) {
+      el.innerHTML = `
+        <div class="page-header">關於</div>
+        <div class="page-sub">TronClass Auto - 自動觀看 eclass/TronClass 影片</div>
+        <div class="card">
+          <p style="font-size:13px;color:var(--text2);line-height:1.8">
+            <b style="color:var(--text)">版本:</b> v1.7.3<br>
+            <b style="color:var(--text)">功能:</b> 自動觀看 HTML5 / YouTube 嵌入影片，支援 2x 倍速<br>
+            <b style="color:var(--text)">GitHub:</b> <a href="https://github.com/thumb2086/tronclass-auto" style="color:var(--accent)">thumb2086/tronclass-auto</a><br>
+            <b style="color:var(--text)">npm:</b> <code style="color:var(--accent)">npx tronclass-auto</code>
+          </p>
+        </div>`;
+    }
+
+    init();
   </script>
 </body>
 </html>
