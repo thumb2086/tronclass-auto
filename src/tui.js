@@ -1,16 +1,141 @@
-const inquirer = require('inquirer');
+const readline = require('readline');
 const chalk = require('chalk');
 const { loadConfig, saveConfig, BASE_URL } = require('./config');
 const { loadCookies } = require('./auth');
 const pkg = require('../package.json');
 
 function box(lines, width = 52) {
-  const top = '╔' + '═'.repeat(width - 2) + '╗';
-  const bot = '╚' + '═'.repeat(width - 2) + '╝';
-  const pad = (s) => '║ ' + s.padEnd(width - 4) + ' ║';
-  console.log(chalk.cyan(top));
-  lines.forEach(l => console.log(chalk.cyan(pad(l))));
-  console.log(chalk.cyan(bot));
+  console.log(chalk.cyan('╔' + '═'.repeat(width - 2) + '╗'));
+  lines.forEach(l => console.log(chalk.cyan('║ ') + l.padEnd(width - 4) + chalk.cyan(' ║')));
+  console.log(chalk.cyan('╚' + '═'.repeat(width - 2) + '╝'));
+}
+
+function promptList(message, choices, header) {
+  return new Promise((resolve) => {
+    let selected = 0;
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+    function render() {
+      const lines = [];
+      lines.push('');
+      choices.forEach((c, i) => {
+        const prefix = i === selected ? chalk.green('>') : ' ';
+        if (typeof c === 'string' && c === '__sep__') {
+          lines.push(chalk.gray('  ─────────────'));
+        } else {
+          const label = typeof c === 'string' ? c : c.name;
+          lines.push(`  ${prefix} ${label}`);
+        }
+      });
+      lines.push('');
+      lines.push(chalk.gray('  ↑↓ 移動  Enter 確認  ESC 返回'));
+
+      const headerLines = header || [];
+      const totalLines = headerLines.length + lines.length;
+
+      process.stdout.write('\x1B[2J\x1B[H');
+      headerLines.forEach(l => process.stdout.write(l + '\n'));
+      lines.forEach(l => process.stdout.write(l + '\n'));
+    }
+
+    render();
+
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+
+    function onData(data) {
+      const key = data.toString();
+
+      if (key === '\u001b[A') {
+        selected = Math.max(0, selected - 1);
+        while (selected < choices.length && (typeof choices[selected] === 'string' || choices[selected].value === '__sep__')) {
+          selected = Math.max(0, selected - 1);
+        }
+        render();
+      } else if (key === '\u001b[B') {
+        selected = Math.min(choices.length - 1, selected + 1);
+        while (selected < choices.length && (typeof choices[selected] === 'string' || choices[selected].value === '__sep__')) {
+          selected = Math.min(choices.length - 1, selected + 1);
+        }
+        render();
+      } else if (key === '\r' || key === '\n') {
+        cleanup();
+        const choice = choices[selected];
+        resolve(typeof choice === 'string' ? choice : choice.value);
+      } else if (key === '\u001b') {
+        cleanup();
+        resolve('__esc__');
+      }
+    }
+
+    function cleanup() {
+      process.stdin.removeListener('data', onData);
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      rl.close();
+    }
+
+    process.stdin.on('data', onData);
+  });
+}
+
+function promptConfirm(message, defaultVal = true) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    process.stdout.write(`  ${message} (${defaultVal ? 'Y/n' : 'y/N'}) `);
+
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+
+    function onData(data) {
+      const key = data.toString();
+      if (key === '\r' || key === '\n') {
+        cleanup();
+        resolve(defaultVal);
+      } else if (key === '\u001b') {
+        cleanup();
+        resolve(null);
+      } else if (key.toLowerCase() === 'y') {
+        cleanup();
+        resolve(true);
+      } else if (key.toLowerCase() === 'n') {
+        cleanup();
+        resolve(false);
+      }
+    }
+
+    function cleanup() {
+      process.stdin.removeListener('data', onData);
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      rl.close();
+    }
+
+    process.stdin.on('data', onData);
+  });
+}
+
+function promptInput(message) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`  ${message}: `, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
+function pressAnyKey() {
+  return new Promise((resolve) => {
+    process.stdout.write(chalk.gray('\n  按任意鍵返回...'));
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.once('data', () => {
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      resolve();
+    });
+  });
 }
 
 async function mainMenu() {
@@ -31,28 +156,28 @@ async function mainMenu() {
       '',
       `課程: ${chalk.cyan(config.courses.length)} 個  |  Cookie: ${chalk.green('✓')}  |  倍速: ${chalk.yellow(config.playbackRate || 2)}x`,
     ]);
-    console.log('');
 
-    const { action } = await inquirer.prompt([{
-      type: 'list',
-      name: 'action',
-      message: '選擇操作:',
-      choices: [
-        { name: chalk.green('▶  開始自動觀看'), value: 'run' },
-        { name: chalk.cyan('📋 管理課程列表'), value: 'courses' },
-        { name: chalk.yellow('📊 查看進度統計'), value: 'status' },
-        { name: chalk.magenta('⚙  設定'), value: 'settings' },
-        new inquirer.Separator(),
-        { name: chalk.gray('🚪 離開'), value: 'exit' }
-      ],
-      pageSize: 10
-    }]);
+    const action = await promptList('選擇操作:', [
+      { name: chalk.green('▶  開始自動觀看'), value: 'run' },
+      { name: chalk.cyan('📋 管理課程列表'), value: 'courses' },
+      { name: chalk.yellow('📊 查看進度統計'), value: 'status' },
+      { name: chalk.magenta('⚙  設定'), value: 'settings' },
+      '__sep__',
+      { name: chalk.gray('🚪 離開'), value: 'exit' }
+    ], [
+      chalk.cyan('╔' + '═'.repeat(50) + '╗'),
+      chalk.cyan('║') + chalk.bold.white(`  tronclass-auto  v${pkg.version}`.padEnd(50)) + chalk.cyan('║'),
+      chalk.cyan('║') + chalk.gray('  自動觀看 eclass/TronClass 影片'.padEnd(50)) + chalk.cyan('║'),
+      chalk.cyan('║') + `  課程: ${chalk.cyan(config.courses.length)} 個  |  Cookie: ${chalk.green('✓')}  |  倍速: ${chalk.yellow(config.playbackRate || 2)}x`.padEnd(50) + chalk.cyan('║'),
+      chalk.cyan('╚' + '═'.repeat(50) + '╝'),
+    ]);
+
+    if (action === '__esc__') { running = false; continue; }
 
     switch (action) {
       case 'run': await runMenu(config); break;
       case 'courses': await courseMenu(); break;
       case 'status': {
-        console.clear();
         const { showStatus } = require('./index');
         await showStatus();
         await pressAnyKey();
@@ -72,20 +197,11 @@ async function runMenu(config) {
     return;
   }
 
-  const { confirm } = await inquirer.prompt([{
-    type: 'confirm',
-    name: 'confirm',
-    message: `開始觀看全部 ${config.courses.length} 個課程?`,
-    default: true
-  }]);
-  if (!confirm) return;
+  const confirm = await promptConfirm(`開始觀看全部 ${config.courses.length} 個課程?`);
+  if (confirm === null) return;
 
-  const { headless } = await inquirer.prompt([{
-    type: 'confirm',
-    name: 'headless',
-    message: '無頭模式（背景執行）?',
-    default: false
-  }]);
+  const headless = await promptConfirm('無頭模式（背景執行）?', false);
+  if (headless === null) return;
 
   console.log('');
   box([
@@ -109,99 +225,58 @@ async function courseMenu() {
 
     console.clear();
 
-    let courseNames = {};
-    if (courses.length > 0) {
-      try {
-        const { chromium } = require('playwright');
-        const { loadCookies: lc } = require('./auth');
-        const cookies = lc();
-        if (cookies.length > 0) {
-          const browser = await chromium.launch({ headless: true, slowMo: 50 });
-          const ctx = await browser.newContext();
-          await ctx.addCookies(cookies);
-          const pg = await ctx.newPage();
-          for (const url of courses) {
-            const match = url.match(/\/course\/(\d+)\//);
-            if (!match) continue;
-            try {
-              await pg.goto(`${BASE_URL}/course/${match[1]}/content#/`, { waitUntil: 'domcontentloaded', timeout: 10000 });
-              await pg.waitForTimeout(3000);
-              const name = await pg.evaluate(() => {
-                const el = document.querySelector('.learning-activities');
-                if (!el) return '';
-                const scope = angular.element(el).scope();
-                if (scope && scope.course) return scope.course.name || '';
-                return '';
-              });
-              if (name) courseNames[match[1]] = name.substring(0, 30);
-            } catch (e) {}
-          }
-          await browser.close();
-        }
-      } catch (e) {}
-    }
-
-    const courseLines = courses.length === 0
-      ? [chalk.gray('  還沒有課程')]
-      : courses.map((url, i) => {
-          const match = url.match(/\/course\/(\d+)\//);
-          const id = match ? match[1] : '?';
-          const name = courseNames[id] || '';
-          const label = name ? `${name} [${id}]` : url.substring(0, 40);
-          return `  ${chalk.white(i + 1 + '.')} ${chalk.cyan(label)}`;
-        });
-
-    box([chalk.bold.white('📋 課程列表'), ...courseLines, '', chalk.gray('  選擇項目可移除')]);
-
     const choices = [
       { name: chalk.green('➕ 新增課程'), value: 'add' },
-      new inquirer.Separator(),
+      '__sep__',
     ];
     courses.forEach((url, i) => {
       const match = url.match(/\/course\/(\d+)\//);
       const id = match ? match[1] : '?';
-      const name = courseNames[id] || id;
-      choices.push({ name: `${chalk.red('✕')} 移除 ${name} [${id}]`, value: `remove_${i}` });
+      choices.push({ name: `${chalk.red('✕')} 移除 [${id}]`, value: `remove_${i}` });
     });
-    choices.push(new inquirer.Separator());
+    if (courses.length > 0) {
+      choices.push({ name: chalk.red('🗑  清空所有'), value: 'clear' });
+    }
+    choices.push('__sep__');
     choices.push({ name: chalk.gray('⬅ 返回'), value: 'back' });
 
-    const { action } = await inquirer.prompt([{
-      type: 'list',
-      name: 'action',
-      message: `課程管理 (${courses.length} 個)`,
-      choices,
-      pageSize: 20
-    }]);
+    const action = await promptList(`課程管理 (${courses.length} 個):`, choices, [
+      chalk.cyan('╔' + '═'.repeat(50) + '╗'),
+      chalk.cyan('║') + chalk.bold.white('  📋 課程列表'.padEnd(50)) + chalk.cyan('║'),
+      chalk.cyan('╠' + '═'.repeat(50) + '╣'),
+      ...courses.map((url, i) => {
+        const match = url.match(/\/course\/(\d+)\//);
+        const id = match ? match[1] : '?';
+        return chalk.cyan('║') + `  ${chalk.white(i + 1 + '.')} [${chalk.cyan(id)}]`.padEnd(51) + chalk.cyan('║');
+      }),
+      chalk.cyan('╚' + '═'.repeat(50) + '╝'),
+    ]);
 
-    if (action === 'back') {
+    if (action === '__esc__' || action === 'back') {
       editing = false;
     } else if (action === 'add') {
-      const { input } = await inquirer.prompt([{
-        type: 'input',
-        name: 'input',
-        message: '輸入課程 ID（如 127331）或完整 URL:',
-        validate: (v) => v.trim().length > 0 ? true : '不可為空'
-      }]);
-      config.courses = config.courses || [];
-      config.courses.push(normalizeUrl(input.trim()));
-      saveConfig(config);
-      console.log(chalk.green('  已新增！'));
+      const input = await promptInput('輸入課程 ID 或 URL');
+      if (input && input.trim()) {
+        config.courses = config.courses || [];
+        config.courses.push(normalizeUrl(input.trim()));
+        saveConfig(config);
+        console.log(chalk.green('  已新增！'));
+        await pressAnyKey();
+      }
     } else if (action === 'clear') {
-      const { confirm } = await inquirer.prompt([{
-        type: 'confirm', name: 'confirm', message: '確定要清空所有課程?', default: false
-      }]);
+      const confirm = await promptConfirm('確定要清空所有課程?', false);
       if (confirm) {
         config.courses = [];
         saveConfig(config);
         console.log(chalk.green('  已清空'));
+        await pressAnyKey();
       }
-    } else if (action.startsWith('remove_')) {
+    } else if (typeof action === 'string' && action.startsWith('remove_')) {
       const idx = parseInt(action.split('_')[1]);
-      const config2 = loadConfig();
-      const removed = config2.courses.splice(idx, 1)[0];
-      saveConfig(config2);
+      const removed = config.courses.splice(idx, 1)[0];
+      saveConfig(config);
       console.log(chalk.green(`  已移除: ${removed}`));
+      await pressAnyKey();
     }
   }
 }
@@ -209,50 +284,45 @@ async function courseMenu() {
 async function settingsMenu() {
   const config = loadConfig();
 
-  const { setting } = await inquirer.prompt([{
-    type: 'list',
-    name: 'setting',
-    message: '設定',
-    choices: [
-      { name: `倍速: ${chalk.cyan(config.playbackRate || 2)}x`, value: 'speed' },
-      { name: `無頭模式: ${chalk.cyan(config.headless ? '是' : '否')}`, value: 'headless' },
-      { name: `SlowMo: ${chalk.cyan(config.slowMo || 50)}ms`, value: 'slowmo' },
-      new inquirer.Separator(),
-      { name: chalk.gray('⬅ 返回'), value: 'back' }
-    ]
-  }]);
+  const setting = await promptList('設定:', [
+    { name: `倍速: ${chalk.cyan(config.playbackRate || 2)}x`, value: 'speed' },
+    { name: `無頭模式: ${chalk.cyan(config.headless ? '是' : '否')}`, value: 'headless' },
+    { name: `SlowMo: ${chalk.cyan(config.slowMo || 50)}ms`, value: 'slowmo' },
+    '__sep__',
+    { name: chalk.gray('⬅ 返回'), value: 'back' }
+  ], [
+    chalk.cyan('╔' + '═'.repeat(50) + '╗'),
+    chalk.cyan('║') + chalk.bold.white('  ⚙  設定'.padEnd(50)) + chalk.cyan('║'),
+    chalk.cyan('╚' + '═'.repeat(50) + '╝'),
+  ]);
 
-  if (setting === 'back') return;
+  if (setting === '__esc__' || setting === 'back') return;
 
   if (setting === 'speed') {
-    const { speed } = await inquirer.prompt([{
-      type: 'list', name: 'speed', message: '選擇播放倍速:',
-      choices: [
-        { name: '1x', value: 1 },
-        { name: '1.5x', value: 1.5 },
-        { name: '2x', value: 2 },
-        { name: '4x', value: 4 },
-        { name: '8x', value: 8 }
-      ],
-      default: config.playbackRate || 2
-    }]);
-    config.playbackRate = speed;
-    saveConfig(config);
-    console.log(chalk.green(`  已設定為 ${speed}x`));
+    const speed = await promptList('選擇播放倍速:', [
+      { name: '1x', value: 1 },
+      { name: '1.5x', value: 1.5 },
+      { name: '2x', value: 2 },
+      { name: '4x', value: 4 },
+      { name: '8x', value: 8 }
+    ]);
+    if (speed !== '__esc__') {
+      config.playbackRate = speed;
+      saveConfig(config);
+      console.log(chalk.green(`  已設定為 ${speed}x`));
+    }
   } else if (setting === 'headless') {
-    const { hl } = await inquirer.prompt([{
-      type: 'confirm', name: 'hl', message: '啟用無頭模式?', default: config.headless || false
-    }]);
-    config.headless = hl;
-    saveConfig(config);
-    console.log(chalk.green(`  無頭模式: ${hl ? '是' : '否'}`));
+    const hl = await promptConfirm('啟用無頭模式?', config.headless || false);
+    if (hl !== null) {
+      config.headless = hl;
+      saveConfig(config);
+    }
   } else if (setting === 'slowmo') {
-    const { ms } = await inquirer.prompt([{
-      type: 'number', name: 'ms', message: 'SlowMo 毫秒數:', default: config.slowMo || 50
-    }]);
-    config.slowMo = ms;
-    saveConfig(config);
-    console.log(chalk.green(`  SlowMo: ${ms}ms`));
+    const ms = await promptInput('SlowMo 毫秒數');
+    if (ms && !isNaN(parseInt(ms))) {
+      config.slowMo = parseInt(ms);
+      saveConfig(config);
+    }
   }
 }
 
@@ -264,20 +334,6 @@ function normalizeUrl(input) {
     return `${BASE_URL}/course/${input}/content#/`;
   }
   return input;
-}
-
-async function pressAnyKey() {
-  return new Promise((resolve) => {
-    process.stdout.write(chalk.gray('按 Enter 或 ESC 返回...'));
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.once('data', (data) => {
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
-      process.stdout.write('\r\x1b[K');
-      resolve();
-    });
-  });
 }
 
 module.exports = { mainMenu };
