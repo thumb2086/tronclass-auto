@@ -110,7 +110,7 @@ async function processCourse(page, courseId, stats) {
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
     } catch (e) {}
-    await page.waitForTimeout(8000);
+    await page.waitForTimeout(15000);
 
     if (!page.url().includes('learning-activity')) {
       console.log(chalk.yellow('  Page redirect, skipping'));
@@ -155,13 +155,15 @@ async function processCourse(page, courseId, stats) {
       }
       const success = await watchVideo(page, stats);
       if (success) {
+        console.log(chalk.gray('  Waiting for platform tracking...'));
+        await page.waitForTimeout(30000);
+
         let serverComplete = false;
-        for (let attempt = 0; attempt < 5; attempt++) {
-          await page.waitForTimeout(10000);
+        try {
           await page.goto(`${BASE_URL}/course/${courseId}/content#/`, {
-            waitUntil: 'domcontentloaded', timeout: 15000
-          }).catch(() => {});
-          await page.waitForTimeout(5000);
+            waitUntil: 'domcontentloaded', timeout: 20000
+          });
+          await page.waitForTimeout(8000);
 
           serverComplete = await page.evaluate((actId) => {
             const el = document.querySelector('.learning-activities');
@@ -178,9 +180,8 @@ async function processCourse(page, courseId, stats) {
             }
             return false;
           }, act.id);
-
-          if (serverComplete) break;
-          console.log(chalk.gray(`  Checking server... (${attempt + 1}/5)`));
+        } catch (e) {
+          console.log(chalk.gray(`  Server check error: ${e.message.substring(0, 40)}`));
         }
 
         if (serverComplete) {
@@ -188,7 +189,7 @@ async function processCourse(page, courseId, stats) {
           done++;
           console.log(chalk.green('  ✓ Saved (server confirmed)'));
         } else {
-          console.log(chalk.yellow('  Server not confirmed after retries, skipping'));
+          console.log(chalk.yellow('  Server not confirmed, skipping'));
           triedIds.add(act.id);
           fail++;
         }
