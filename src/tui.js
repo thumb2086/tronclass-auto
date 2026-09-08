@@ -342,11 +342,11 @@ async function settingsMenu() {
 
   if (setting === 'speed') {
     const speed = await promptList('選擇播放倍速:', [
-      { name: '1x', value: 1 },
-      { name: '1.5x', value: 1.5 },
       { name: '2x', value: 2 },
-      { name: '4x', value: 4 },
-      { name: '8x', value: 8 }
+      { name: '1.5x', value: 1.5 },
+      { name: '1.25x', value: 1.25 },
+      { name: '1x', value: 1 },
+      { name: '0.75x', value: 0.75 },
     ]);
     if (speed !== '__esc__') {
       config.playbackRate = speed;
