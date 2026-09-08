@@ -31,13 +31,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            platform: linux
+            build-flag: --linux
             artifact: tronclass-auto-linux
           - os: windows-latest
-            platform: win32
+            build-flag: --win
             artifact: tronclass-auto-win
           - os: macos-latest
-            platform: darwin
+            build-flag: --mac
             artifact: tronclass-auto-mac
 
     runs-on: ${{ matrix.os }}
@@ -55,7 +55,7 @@ jobs:
 
       - name: Build Electron app
         working-directory: gui
-        run: npx electron-builder --${{ matrix.platform }}
+        run: npx electron-builder ${{ matrix.build-flag }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
