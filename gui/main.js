@@ -100,12 +100,12 @@ ipcMain.handle('get-status', async () => {
   const browser = await chromium.launch(opts);
   const context = await browser.newContext();
   await context.addCookies(cookies);
-  const page = await context.newPage();
+  const checkPage = await context.newPage();
 
   try {
-    await page.goto('https://eclass.yuntech.edu.tw', { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await page.waitForTimeout(2000);
-    if (page.url().includes('login')) {
+    await checkPage.goto('https://eclass.yuntech.edu.tw', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await checkPage.waitForTimeout(2000);
+    if (checkPage.url().includes('login')) {
       await browser.close();
       return { error: 'Cookie 過期，請重新登入' };
     }
@@ -113,21 +113,23 @@ ipcMain.handle('get-status', async () => {
     await browser.close();
     return { error: '無法連線: ' + e.message };
   }
+  await checkPage.close();
 
   const BASE_URL = 'https://eclass.yuntech.edu.tw';
   const results = [];
   const courses = config.courses || [];
 
-  for (const courseUrl of courses) {
+  const coursePromises = courses.map(async (courseUrl) => {
     const match = courseUrl.match(/\/course\/(\d+)\//);
     const courseId = match ? match[1] : '?';
     let courseName = '';
     let videos = [];
     let exams = 0;
+    const pg = await context.newPage();
     try {
-      await page.goto(`${BASE_URL}/course/${courseId}/content#/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
-      await page.waitForTimeout(4000);
-      const data = await page.evaluate(() => {
+      await pg.goto(`${BASE_URL}/course/${courseId}/content#/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await pg.waitForTimeout(3000);
+      const data = await pg.evaluate(() => {
         const el = document.querySelector('.learning-activities');
         if (!el) return { name: '', videos: [], exams: 0 };
         let name = '';
@@ -164,15 +166,18 @@ ipcMain.handle('get-status', async () => {
       videos = data.videos;
       exams = data.exams;
     } catch (e) {}
+    await pg.close();
     const videoOnly = videos.filter(v => v.type === 'online_video');
     const completed = videoOnly.filter(v => v.completeness === 'full').length;
     const future = videoOnly.filter(v => v.isFuture && v.completeness !== 'full').length;
     const remaining = videoOnly.filter(v => v.completeness !== 'full' && !v.isFuture).length;
     const pct = videoOnly.length > 0 ? Math.round((completed / videoOnly.length) * 100) : 0;
-    results.push({ courseId, courseName: courseName.substring(0, 30), total: videoOnly.length, completed, remaining, future, exams, pct });
-  }
+    return { courseId, courseName: courseName.substring(0, 30), total: videoOnly.length, completed, remaining, future, exams, pct };
+  });
 
-  await page.close();
+  const resolved = await Promise.all(coursePromises);
+  results.push(...resolved);
+
   await browser.close();
   return { courses: results };
 });
