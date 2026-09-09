@@ -199,7 +199,7 @@ async function runMenu(config) {
   }
 
   const confirm = await promptConfirm(`開始觀看全部 ${config.courses.length} 個課程?`);
-  if (confirm === null) return;
+  if (!confirm) return;
 
   const headless = await promptConfirm('無頭模式（背景執行）?', false);
   if (headless === null) return;

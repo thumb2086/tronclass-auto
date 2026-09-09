@@ -126,7 +126,7 @@ ipcMain.handle('get-status', async () => {
     let exams = 0;
     try {
       await page.goto(`${BASE_URL}/course/${courseId}/content#/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
-      await page.waitForTimeout(8000);
+      await page.waitForTimeout(4000);
       const data = await page.evaluate(() => {
         const el = document.querySelector('.learning-activities');
         if (!el) return { name: '', videos: [], exams: 0 };
@@ -155,7 +155,7 @@ ipcMain.handle('get-status', async () => {
             const startDate = startTime ? new Date(startTime) : null;
             const isFuture = startDate && startDate > now;
             if (a.type === 'exam') { examCount++; return; }
-            vids.push({ completeness, isUpcoming, isFuture });
+            vids.push({ type: a.type || '', completeness, isUpcoming, isFuture });
           });
         } catch(e) {}
         return { name, videos: vids, exams: examCount };
@@ -164,11 +164,12 @@ ipcMain.handle('get-status', async () => {
       videos = data.videos;
       exams = data.exams;
     } catch (e) {}
-    const completed = videos.filter(v => v.completeness === 'full').length;
-    const future = videos.filter(v => v.isFuture && v.completeness !== 'full').length;
-    const remaining = videos.filter(v => v.completeness !== 'full' && !v.isFuture).length;
-    const pct = videos.length > 0 ? Math.round((completed / videos.length) * 100) : 0;
-    results.push({ courseId, courseName: courseName.substring(0, 30), total: videos.length, completed, remaining, future, exams, pct });
+    const videoOnly = videos.filter(v => v.type === 'online_video');
+    const completed = videoOnly.filter(v => v.completeness === 'full').length;
+    const future = videoOnly.filter(v => v.isFuture && v.completeness !== 'full').length;
+    const remaining = videoOnly.filter(v => v.completeness !== 'full' && !v.isFuture).length;
+    const pct = videoOnly.length > 0 ? Math.round((completed / videoOnly.length) * 100) : 0;
+    results.push({ courseId, courseName: courseName.substring(0, 30), total: videoOnly.length, completed, remaining, future, exams, pct });
   }
 
   await page.close();
