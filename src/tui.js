@@ -280,16 +280,17 @@ async function courseMenu() {
 
     const action = await promptList(`課程管理 (${courses.length} 個):`, choices, [
       '',
-      chalk.white('┌' + '─'.repeat(50) + '┐'),
-      chalk.white('│') + chalk.bold.white('  📋 課程列表'.padEnd(50)) + chalk.white('│'),
-      chalk.white('├' + '─'.repeat(50) + '┤'),
+      chalk.white('╔' + '═'.repeat(50) + '╗'),
+      chalk.white('║') + chalk.bold.white(`  tronclass-auto  v${pkg.version}`.padEnd(50)) + chalk.white('║'),
+      chalk.white('║') + chalk.bold.white('  📋 課程列表'.padEnd(50)) + chalk.white('║'),
+      chalk.white('╠' + '═'.repeat(50) + '╣'),
       ...courses.map((url, i) => {
         const match = url.match(/\/course\/(\d+)\//);
         const id = match ? match[1] : '?';
         const name = courseNames[id] || id;
-        return chalk.white('│') + `  ${chalk.white(i + 1 + '.')} ${chalk.cyan(name)} [${id}]`.padEnd(51) + chalk.white('│');
+        return chalk.white('║') + `  ${chalk.white(i + 1 + '.')} ${chalk.cyan(name)} [${id}]`.padEnd(51) + chalk.white('║');
       }),
-      chalk.white('└' + '─'.repeat(50) + '┘'),
+      chalk.white('╚' + '═'.repeat(50) + '╝'),
     ]);
 
     if (action === '__esc__' || action === 'back') {

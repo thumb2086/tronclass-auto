@@ -305,18 +305,19 @@ async function showStatus() {
   let totalRemaining = 0;
   let totalExams = 0;
 
-  const courseResults = [];
-  for (const courseUrl of courses) {
+  const courseResults = await Promise.all(courses.map(async (courseUrl) => {
     const match = courseUrl.match(/\/course\/(\d+)\//);
     const courseId = match ? match[1] : '?';
+    const pg = await context.newPage();
     try {
-      const allVideos = await getAllVideos(page, courseId);
-      courseResults.push({ courseId, allVideos });
+      const allVideos = await getAllVideos(pg, courseId);
+      return { courseId, allVideos };
     } catch (e) {
-      courseResults.push({ courseId, allVideos: [] });
+      return { courseId, allVideos: [] };
+    } finally {
+      await pg.close();
     }
-  }
-  await page.close();
+  }));
 
   for (const { courseId, allVideos } of courseResults) {
     try {
@@ -406,10 +407,11 @@ async function run(opts = {}) {
   await page.waitForTimeout(2000);
 
   if (page.url().includes('login')) {
-    console.log(chalk.red('[ERROR] Cookie 過期，請重新執行 tronclass login'));
+    console.log(chalk.red('[ERROR] Cookie 過期'));
     await browser.close();
     return;
   }
+  await page.close();
 
   console.log(chalk.green('[OK] Login verified'));
 
