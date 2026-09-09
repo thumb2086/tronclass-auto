@@ -224,7 +224,43 @@ async function courseMenu() {
     const config = loadConfig();
     const courses = config.courses || [];
 
-    console.clear();
+    process.stdout.write('\x1B[2J\x1B[H');
+
+    let courseNames = {};
+    if (courses.length > 0) {
+      process.stdout.write(chalk.gray('  載入課程名稱...\n'));
+      try {
+        const { chromium } = require('playwright');
+        const cookies = loadCookies();
+        if (cookies.length > 0) {
+          const browser = await chromium.launch({ headless: true, slowMo: 50, args: ['--disable-gpu', '--no-sandbox', '--disable-cache'] });
+          const ctx = await browser.newContext();
+          await ctx.addCookies(cookies);
+          const pg = await ctx.newPage();
+          const results = await Promise.all(courses.map(async (url) => {
+            const match = url.match(/\/course\/(\d+)\//);
+            if (!match) return { id: '?', name: '' };
+            const p = await ctx.newPage();
+            try {
+              await p.goto(`${BASE_URL}/course/${match[1]}/content#/`, { waitUntil: 'domcontentloaded', timeout: 8000 });
+              await p.waitForTimeout(2000);
+              const name = await p.evaluate(() => {
+                const el = document.querySelector('.learning-activities');
+                if (!el) return '';
+                try { const s = angular.element(el).scope(); return (s && s.course) ? (s.course.name || '') : ''; } catch { return ''; }
+              });
+              return { id: match[1], name: name.substring(0, 25) };
+            } catch (e) { return { id: match[1], name: '' }; }
+            finally { await p.close(); }
+          }));
+          results.forEach(r => { if (r.name) courseNames[r.id] = r.name; });
+          await pg.close();
+          await browser.close();
+        }
+      } catch (e) {}
+    }
+
+    process.stdout.write('\x1B[2J\x1B[H');
 
     const choices = [
       { name: chalk.green('➕ 新增課程'), value: 'add' },
@@ -233,7 +269,9 @@ async function courseMenu() {
     courses.forEach((url, i) => {
       const match = url.match(/\/course\/(\d+)\//);
       const id = match ? match[1] : '?';
-      choices.push({ name: `${chalk.red('✕')} 移除 [${id}]`, value: `remove_${i}` });
+      const name = courseNames[id];
+      const label = name ? `${name} [${id}]` : `[${id}]`;
+      choices.push({ name: `${chalk.red('✕')} 移除 ${label}`, value: `remove_${i}` });
     });
     if (courses.length > 0) {
       choices.push({ name: chalk.red('🗑  清空所有'), value: 'clear' });
@@ -249,7 +287,9 @@ async function courseMenu() {
       ...courses.map((url, i) => {
         const match = url.match(/\/course\/(\d+)\//);
         const id = match ? match[1] : '?';
-        return chalk.cyan('│') + `  ${chalk.white(i + 1 + '.')} [${chalk.cyan(id)}]` + ' '.repeat(50 - 10 - id.length - String(i+1).length) + chalk.cyan('│');
+        const name = courseNames[id] || '';
+        const display = name ? `${chalk.white(i + 1 + '.')} ${chalk.cyan(name)} [${id}]` : `${chalk.white(i + 1 + '.')} [${chalk.cyan(id)}]`;
+        return chalk.cyan('│') + '  ' + display + ' '.repeat(Math.max(1, 48 - name.length - id.length - 4)) + chalk.cyan('│');
       }),
       chalk.cyan('└' + '─'.repeat(50) + '┘'),
     ]);
