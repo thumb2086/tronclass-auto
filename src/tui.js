@@ -17,7 +17,6 @@ function promptList(message, choices, header) {
 
     function render() {
       const lines = [];
-      lines.push('');
       choices.forEach((c, i) => {
         const prefix = i === selected ? chalk.green('>') : ' ';
         if (typeof c === 'string' && c === '__sep__') {
@@ -31,8 +30,6 @@ function promptList(message, choices, header) {
       lines.push(chalk.gray('  ↑↓ 移動  Enter 確認  ESC 返回'));
 
       const headerLines = header || [];
-      const totalLines = headerLines.length + lines.length;
-
       process.stdout.write('\x1B[2J\x1B[H');
       headerLines.forEach(l => process.stdout.write(l + '\n'));
       lines.forEach(l => process.stdout.write(l + '\n'));
@@ -138,6 +135,18 @@ function pressAnyKey() {
   });
 }
 
+function headerLines() {
+  const config = loadConfig();
+  return [
+    '',
+    chalk.white('╔' + '═'.repeat(52) + '╗'),
+    chalk.white('║ ') + chalk.bold.white(`tronclass-auto  v${pkg.version}`.padEnd(52)) + chalk.white('║'),
+    chalk.white('║ ') + chalk.gray('自動觀看 eclass/TronClass 影片'.padEnd(52)) + chalk.white('║'),
+    chalk.white('║ ') + `課程: ${chalk.cyan(config.courses.length)} 個  |  Cookie: ${chalk.green('✓')}  |  倍速: ${chalk.yellow(config.playbackRate || 2)}x`.padEnd(52) + chalk.white('║'),
+    chalk.white('╚' + '═'.repeat(52) + '╝'),
+  ];
+}
+
 async function mainMenu() {
   const cookies = loadCookies();
   if (!cookies.length) {
@@ -147,16 +156,6 @@ async function mainMenu() {
 
   let running = true;
   while (running) {
-    const config = loadConfig();
-
-    console.clear();
-    box([
-      chalk.bold.white(`tronclass-auto  v${pkg.version}`),
-      chalk.gray('自動觀看 eclass/TronClass 影片'),
-      '',
-      `課程: ${chalk.cyan(config.courses.length)} 個  |  Cookie: ${chalk.green('✓')}  |  倍速: ${chalk.yellow(config.playbackRate || 2)}x`,
-    ]);
-
     const action = await promptList('選擇操作:', [
       { name: chalk.green('▶  開始自動觀看'), value: 'run' },
       { name: chalk.cyan('📋 管理課程列表'), value: 'courses' },
@@ -164,14 +163,7 @@ async function mainMenu() {
       { name: chalk.magenta('⚙  設定'), value: 'settings' },
       '__sep__',
       { name: chalk.gray('🚪 離開'), value: 'exit' }
-    ], [
-      '',
-      chalk.white('╔' + '═'.repeat(50) + '╗'),
-      chalk.white('║') + chalk.bold.white(`  tronclass-auto  v${pkg.version}`.padEnd(50)) + chalk.white('║'),
-      chalk.white('║') + chalk.gray('  自動觀看 eclass/TronClass 影片'.padEnd(50)) + chalk.white('║'),
-      chalk.white('║') + `  課程: ${chalk.cyan(config.courses.length)} 個  |  Cookie: ${chalk.green('✓')}  |  倍速: ${chalk.yellow(config.playbackRate || 2)}x`.padEnd(50) + chalk.white('║'),
-      chalk.white('╚' + '═'.repeat(50) + '╝'),
-    ]);
+    ], headerLines());
 
     if (action === '__esc__') { running = false; continue; }
 
@@ -261,6 +253,7 @@ async function courseMenu() {
     }
 
     process.stdout.write('\x1B[2J\x1B[H');
+    drawHeader();
 
     const choices = [
       { name: chalk.green('➕ 新增課程'), value: 'add' },
@@ -279,8 +272,8 @@ async function courseMenu() {
     choices.push('__sep__');
     choices.push({ name: chalk.gray('⬅ 返回'), value: 'back' });
 
-    const action = await promptList(`課程管理 (${courses.length} 個):`, choices, [
-      '',
+    const courseHeader = [
+      ...headerLines(),
       chalk.cyan('┌' + '─'.repeat(50) + '┐'),
       chalk.cyan('│') + chalk.bold.white('  📋 課程列表' + ' '.repeat(39)) + chalk.cyan('│'),
       chalk.cyan('├' + '─'.repeat(50) + '┤'),
@@ -292,7 +285,9 @@ async function courseMenu() {
         return chalk.cyan('│') + '  ' + display + ' '.repeat(Math.max(1, 48 - name.length - id.length - 4)) + chalk.cyan('│');
       }),
       chalk.cyan('└' + '─'.repeat(50) + '┘'),
-    ]);
+    ];
+
+    const action = await promptList(`課程管理 (${courses.length} 個):`, choices, courseHeader);
 
     if (action === '__esc__' || action === 'back') {
       editing = false;
@@ -332,12 +327,7 @@ async function settingsMenu() {
     { name: `SlowMo: ${chalk.cyan(config.slowMo || 50)}ms`, value: 'slowmo' },
     '__sep__',
     { name: chalk.gray('⬅ 返回'), value: 'back' }
-  ], [
-    '',
-    chalk.white('╔' + '═'.repeat(50) + '╗'),
-    chalk.white('║') + chalk.bold.white('  ⚙  設定'.padEnd(50)) + chalk.white('║'),
-    chalk.white('╚' + '═'.repeat(50) + '╝'),
-  ]);
+  ], [...headerLines(), '', chalk.white('╔' + '═'.repeat(50) + '╗'), chalk.white('║') + chalk.bold.white('  ⚙  設定'.padEnd(50)) + chalk.white('║'), chalk.white('╚' + '═'.repeat(50) + '╝')]);
 
   if (setting === '__esc__' || setting === 'back') return;
 
