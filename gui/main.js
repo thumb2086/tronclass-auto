@@ -114,7 +114,6 @@ ipcMain.handle('get-status', async () => {
     return { error: '無法連線: ' + e.message };
   }
 
-  const { getAllVideos } = require(path.join(srcDir, 'src', 'index'));
   const BASE_URL = 'https://eclass.yuntech.edu.tw';
   const results = [];
   const courses = config.courses || [];
@@ -123,27 +122,53 @@ ipcMain.handle('get-status', async () => {
     const match = courseUrl.match(/\/course\/(\d+)\//);
     const courseId = match ? match[1] : '?';
     let courseName = '';
+    let videos = [];
+    let exams = 0;
     try {
-      await page.goto(`${BASE_URL}/course/${courseId}/content#/`, { waitUntil: 'domcontentloaded', timeout: 10000 });
-      await page.waitForTimeout(2000);
-      courseName = await page.evaluate(() => {
+      await page.goto(`${BASE_URL}/course/${courseId}/content#/`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.waitForTimeout(8000);
+      const data = await page.evaluate(() => {
         const el = document.querySelector('.learning-activities');
-        if (!el) return '';
-        try { const s = angular.element(el).scope(); return (s && s.course) ? (s.course.name || '') : ''; } catch { return ''; }
+        if (!el) return { name: '', videos: [], exams: 0 };
+        let name = '';
+        let vids = [];
+        let examCount = 0;
+        try {
+          const scope = angular.element(el).scope();
+          if (scope && scope.course) name = scope.course.name || '';
+          const acts = document.querySelectorAll('.learning-activity.sortable');
+          acts.forEach((actEl) => {
+            const actScope = angular.element(actEl).scope();
+            if (!actScope || !actScope.activity) return;
+            const a = actScope.activity;
+            let completeness = '';
+            try { completeness = scope.getActivityCompleteness(a); } catch(e) {}
+            let isUpcoming = false;
+            try { isUpcoming = scope.activityUpcoming(a); } catch(e) {}
+            let startTime = '';
+            try {
+              const txt = actEl.textContent || '';
+              const tm = txt.match(/(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}/);
+              if (tm) startTime = tm[1];
+            } catch(e) {}
+            const now = new Date();
+            const startDate = startTime ? new Date(startTime) : null;
+            const isFuture = startDate && startDate > now;
+            if (a.type === 'exam') { examCount++; return; }
+            vids.push({ completeness, isUpcoming, isFuture });
+          });
+        } catch(e) {}
+        return { name, videos: vids, exams: examCount };
       });
+      courseName = data.name;
+      videos = data.videos;
+      exams = data.exams;
     } catch (e) {}
-    try {
-      const allVideos = await getAllVideos(page, courseId);
-      const videos = allVideos.filter(u => u.type === 'online_video');
-      const completed = videos.filter(v => v.completeness === 'full').length;
-      const future = videos.filter(v => v.isFuture && v.completeness !== 'full').length;
-      const remaining = videos.filter(v => v.completeness !== 'full' && !v.isFuture).length;
-      const exams = allVideos.filter(u => u.type === 'exam').length;
-      const pct = videos.length > 0 ? Math.round((completed / videos.length) * 100) : 0;
-      results.push({ courseId, courseName: courseName.substring(0, 30), total: videos.length, completed, remaining, future, exams, pct });
-    } catch (e) {
-      results.push({ courseId, courseName: courseName.substring(0, 30), total: 0, completed: 0, remaining: 0, future: 0, exams: 0, pct: 0 });
-    }
+    const completed = videos.filter(v => v.completeness === 'full').length;
+    const future = videos.filter(v => v.isFuture && v.completeness !== 'full').length;
+    const remaining = videos.filter(v => v.completeness !== 'full' && !v.isFuture).length;
+    const pct = videos.length > 0 ? Math.round((completed / videos.length) * 100) : 0;
+    results.push({ courseId, courseName: courseName.substring(0, 30), total: videos.length, completed, remaining, future, exams, pct });
   }
 
   await page.close();
