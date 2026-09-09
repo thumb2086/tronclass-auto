@@ -194,6 +194,7 @@ async function mainMenu() {
       case 'run': await runMenu(); break;
       case 'courses': await courseMenu(); break;
       case 'status': {
+        draw([chalk.gray('  載入進度統計中，請稍候...')]);
         const { showStatus } = require('./index');
         await showStatus();
         await pressAnyKey();
