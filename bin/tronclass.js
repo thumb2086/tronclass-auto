@@ -65,6 +65,29 @@ program
   });
 
 program
+  .command('update')
+  .description('更新到最新版本')
+  .action(async () => {
+    const { execSync } = require('child_process');
+    console.log(`目前版本: v${pkg.version}`);
+    console.log('檢查最新版本...');
+    try {
+      const latest = execSync('npm view tronclass-auto version', { encoding: 'utf8' }).trim();
+      console.log(`最新版本: v${latest}`);
+      if (latest === pkg.version) {
+        console.log('已經是最新版本！');
+        return;
+      }
+      console.log('正在更新...');
+      execSync('npm install -g tronclass-auto@latest', { stdio: 'inherit' });
+      console.log('更新完成！');
+    } catch (e) {
+      console.error('更新失敗:', e.message);
+      console.error('請手動執行: npm install -g tronclass-auto@latest');
+    }
+  });
+
+program
   .command('config')
   .description('顯示目前設定')
   .action(() => {
