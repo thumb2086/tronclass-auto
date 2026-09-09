@@ -226,42 +226,6 @@ async function courseMenu() {
 
     console.clear();
 
-    let courseNames = {};
-    if (courses.length > 0) {
-      try {
-        const { chromium } = require('playwright');
-        const cookies = loadCookies();
-        if (cookies.length > 0) {
-          const browser = await chromium.launch({
-            headless: true,
-            slowMo: 50,
-            args: ['--disable-gpu', '--disable-software-rasterizer', '--no-sandbox', '--disable-cache']
-          });
-          const ctx = await browser.newContext();
-          await ctx.addCookies(cookies);
-          const pg = await ctx.newPage();
-
-          for (const url of courses) {
-            const match = url.match(/\/course\/(\d+)\//);
-            if (!match) continue;
-            try {
-              await pg.goto(`${BASE_URL}/course/${match[1]}/content#/`, { waitUntil: 'domcontentloaded', timeout: 8000 });
-              await pg.waitForTimeout(2000);
-              const name = await pg.evaluate(() => {
-                const el = document.querySelector('.learning-activities');
-                if (!el) return '';
-                const scope = angular.element(el).scope();
-                return (scope && scope.course) ? (scope.course.name || '') : '';
-              });
-              if (name) courseNames[match[1]] = name.substring(0, 30);
-            } catch (e) {}
-          }
-          await pg.close();
-          await browser.close();
-        }
-      } catch (e) {}
-    }
-
     const choices = [
       { name: chalk.green('➕ 新增課程'), value: 'add' },
       '__sep__',
@@ -269,8 +233,7 @@ async function courseMenu() {
     courses.forEach((url, i) => {
       const match = url.match(/\/course\/(\d+)\//);
       const id = match ? match[1] : '?';
-      const name = courseNames[id] || id;
-      choices.push({ name: `${chalk.red('✕')} 移除 ${name} [${id}]`, value: `remove_${i}` });
+      choices.push({ name: `${chalk.red('✕')} 移除 [${id}]`, value: `remove_${i}` });
     });
     if (courses.length > 0) {
       choices.push({ name: chalk.red('🗑  清空所有'), value: 'clear' });
@@ -280,17 +243,15 @@ async function courseMenu() {
 
     const action = await promptList(`課程管理 (${courses.length} 個):`, choices, [
       '',
-      chalk.white('╔' + '═'.repeat(50) + '╗'),
-      chalk.white('║') + chalk.bold.white(`  tronclass-auto  v${pkg.version}`.padEnd(50)) + chalk.white('║'),
-      chalk.white('║') + chalk.bold.white('  📋 課程列表'.padEnd(50)) + chalk.white('║'),
-      chalk.white('╠' + '═'.repeat(50) + '╣'),
+      chalk.cyan('┌' + '─'.repeat(50) + '┐'),
+      chalk.cyan('│') + chalk.bold.white('  📋 課程列表' + ' '.repeat(39)) + chalk.cyan('│'),
+      chalk.cyan('├' + '─'.repeat(50) + '┤'),
       ...courses.map((url, i) => {
         const match = url.match(/\/course\/(\d+)\//);
         const id = match ? match[1] : '?';
-        const name = courseNames[id] || id;
-        return chalk.white('║') + `  ${chalk.white(i + 1 + '.')} ${chalk.cyan(name)} [${id}]`.padEnd(51) + chalk.white('║');
+        return chalk.cyan('│') + `  ${chalk.white(i + 1 + '.')} [${chalk.cyan(id)}]` + ' '.repeat(50 - 10 - id.length - String(i+1).length) + chalk.cyan('│');
       }),
-      chalk.white('╚' + '═'.repeat(50) + '╝'),
+      chalk.cyan('└' + '─'.repeat(50) + '┘'),
     ]);
 
     if (action === '__esc__' || action === 'back') {
