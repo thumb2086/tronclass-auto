@@ -83,6 +83,14 @@ function menu(title, choices, extraLines) {
   });
 }
 
+function flushStdin() {
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  while (process.stdin.readableLength > 0) process.stdin.read();
+  process.stdin.setRawMode(false);
+  process.stdin.pause();
+}
+
 function confirm(message, defaultVal = true) {
   return new Promise((resolve) => {
     process.stdout.write(`  ${message} (${defaultVal ? 'Y/n' : 'y/N'}) `);
@@ -116,10 +124,13 @@ function input(message) {
 
 function pressAnyKey() {
   return new Promise((resolve) => {
-    process.stdout.write(chalk.gray('\n  按任意鍵返回...'));
     process.stdin.setRawMode(true);
     process.stdin.resume();
-    process.stdin.once('data', () => { process.stdin.setRawMode(false); process.stdin.pause(); resolve(); });
+    while (process.stdin.readableLength > 0) process.stdin.read();
+    setTimeout(() => {
+      process.stdout.write(chalk.gray('\n  按任意鍵返回...'));
+      process.stdin.once('data', () => { process.stdin.setRawMode(false); process.stdin.pause(); resolve(); });
+    }, 100);
   });
 }
 
