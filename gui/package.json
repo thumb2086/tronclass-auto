@@ -1,6 +1,6 @@
 {
   "name": "tronclass-auto-gui",
-  "version": "1.7.1",
+  "version": "1.7.4",
   "description": "Electron wrapper for tronclass-auto",
   "main": "main.js",
   "scripts": {
